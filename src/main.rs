@@ -1,11 +1,11 @@
-use aoc::{AdventOfCode, DataConfiguration, Year2021};
+use aoc::{AdventOfCode, DataConfiguration, Year2022};
 use color_eyre::Result;
 
 fn main() -> Result<()> {
     setup()?;
 
     let data_config = DataConfiguration::new("./data")?;
-    let aoc = AdventOfCode::of_year::<Year2021>(data_config)?.with_ui();
+    let aoc = AdventOfCode::of_year::<Year2022>(data_config)?.with_ui();
 
     aoc.run()?;
 

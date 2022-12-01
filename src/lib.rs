@@ -10,7 +10,7 @@ use std::{
 };
 
 mod challenges;
-pub use challenges::year_2021::Year2021;
+pub use challenges::year_2022::Year2022;
 use challenges::Year;
 
 mod ui;

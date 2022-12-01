@@ -25,7 +25,7 @@ enum Status {
     Error,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ListSelection {
     Day(usize),
     Part(usize, usize),
@@ -81,7 +81,7 @@ pub struct ChallengeList {
     selected: ListState,
     selections: Vec<ListSelection>,
     available_selections: Vec<ListSelection>,
-    statuses: HashMap<usize, Vec<(usize, Status)>>,
+    statuses: HashMap<ListSelection, Status>,
 }
 
 impl ChallengeList {
@@ -149,6 +149,14 @@ impl ChallengeList {
             .retain(|s| s.day() != day || !matches!(s, ListSelection::Part(d, _) if *d == day))
     }
 
+    fn status_of_day(&self, day: usize) -> Option<Status> {
+        self.statuses
+            .iter()
+            .filter(|(k, _)| k.day() == day)
+            .max()
+            .map(|(_, v)| *v)
+    }
+
     fn list(&self, aoc: &AdventOfCode) -> Vec<ListItem> {
         self.selections
             .iter()
@@ -163,12 +171,14 @@ impl ChallengeList {
                 let spans = if let Some(challenge) = challenge.as_ref() {
                     let name = challenge.name();
 
-                    let status_indicator = self
-                        .statuses
-                        .get(&day)
-                        .map(|s| {
-                            let s = *s.iter().map(|(_, s)| s).max().unwrap();
+                    let status = if matches!(selection, ListSelection::Day(_)) {
+                        self.status_of_day(day)
+                    } else {
+                        self.statuses.get(selection).copied()
+                    };
 
+                    let status_indicator = status
+                        .map(|s| {
                             let style = match s {
                                 Status::Running => Style::default().fg(Color::Yellow),
                                 Status::Finished => Style::default().fg(Color::Green),
@@ -292,15 +302,12 @@ impl<B: Backend> Widget<B> for ChallengeList {
 
         for status in runner_status {
             self.statuses
-                .entry(status.selection.day)
-                .and_modify(|s| {
-                    if let Some((_, s)) = s.iter_mut().find(|(p, _)| *p == status.selection.part) {
-                        *s = kind_from_status(status)
-                    } else {
-                        s.push((status.selection.part, kind_from_status(status)))
-                    }
-                })
-                .or_insert_with(|| vec![(status.selection.part, kind_from_status(status))]);
+                .entry(ListSelection::Part(
+                    status.selection.day,
+                    status.selection.part,
+                ))
+                .and_modify(|s| *s = kind_from_status(status))
+                .or_insert_with(|| kind_from_status(status));
         }
     }
 
