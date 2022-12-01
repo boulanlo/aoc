@@ -12,17 +12,79 @@ use tui::{
 };
 
 use crate::{
-    runner::{RunnersStatus, Selection, Status},
+    runner::{RunnersStatus, Status},
     AdventOfCode,
 };
 
-use super::{Widget, WidgetKind};
+use super::{list::ListSelection, Widget, WidgetKind};
+
+enum ChallengeStatus {
+    Day(Vec<Status>),
+    Part(Status),
+}
 
 #[derive(Default)]
 pub struct ChallengeOutput {
     selected_tab: usize,
-    selected_day: Option<Selection>,
-    status: Option<Status>,
+    selected_day: Option<ListSelection>,
+    status: Option<ChallengeStatus>,
+}
+
+impl ChallengeOutput {
+    fn paragraph(&self) -> Vec<Spans> {
+        fn parse_status((idx, status): (usize, &Status)) -> Spans {
+            let style_pending = Style::default().fg(Color::Yellow);
+            let style_success = Style::default().fg(Color::Green);
+            let style_error = Style::default()
+                .fg(Color::Red)
+                .add_modifier(Modifier::RAPID_BLINK);
+
+            match &status.result {
+                None => Spans::from(Span::styled(format!("Part {}:", idx + 1), style_pending)),
+                Some(Ok(result)) => Spans::from(vec![
+                    Span::styled(format!("Part {}: ", idx + 1), style_success),
+                    Span::raw(result),
+                ]),
+
+                Some(Err(e)) => Spans::from(vec![
+                    Span::styled(format!("Part {}: ", idx + 1), style_error),
+                    Span::raw(e),
+                ]),
+            }
+        }
+
+        match &self.status {
+            None => Vec::new(),
+            Some(status) => match status {
+                ChallengeStatus::Day(statuses) => match self.selected_tab {
+                    0 => statuses.iter().enumerate().map(parse_status).collect(),
+                    1 => statuses
+                        .iter()
+                        .flat_map(|s| s.stdout.iter().map(|l| Spans::from(Span::raw(l))))
+                        .collect(),
+                    2 => statuses
+                        .iter()
+                        .flat_map(|s| s.stderr.iter().map(|l| Spans::from(Span::raw(l))))
+                        .collect(),
+                    _ => unreachable!(),
+                },
+                ChallengeStatus::Part(status) => match self.selected_tab {
+                    0 => vec![parse_status((status.selection.part - 1, status))],
+                    1 => status
+                        .stdout
+                        .iter()
+                        .map(|l| Spans::from(Span::raw(l)))
+                        .collect(),
+                    2 => status
+                        .stderr
+                        .iter()
+                        .map(|l| Spans::from(Span::raw(l)))
+                        .collect(),
+                    _ => unreachable!(),
+                },
+            },
+        }
+    }
 }
 
 impl<B: Backend> Widget<B> for ChallengeOutput {
@@ -48,69 +110,7 @@ impl<B: Backend> Widget<B> for ChallengeOutput {
         .highlight_style(Style::default().fg(Color::Cyan))
         .select(self.selected_tab);
 
-        let success_style = Style::default()
-            .fg(Color::Green)
-            .add_modifier(Modifier::BOLD);
-
-        let contents = self
-            .status
-            .as_ref()
-            .map(|status| match self.selected_tab {
-                0 => match &status.result {
-                    None => vec![Spans::from(Span::raw(""))],
-                    Some(Ok(result)) => {
-                        if let Some(part) = self.selected_day.as_ref().unwrap().part {
-                            let result = result.iter().find(|(p, _)| *p == part).unwrap().1.clone();
-
-                            vec![Spans::from(vec![
-                                Span::styled("Result: ", success_style),
-                                Span::raw(result),
-                            ])]
-                        } else {
-                            let part_1 = &result[0];
-                            let part_2 = &result[1];
-
-                            debug_assert_eq!(part_1.0, 1);
-                            debug_assert_eq!(part_2.0, 2);
-
-                            vec![
-                                Spans::from(vec![
-                                    Span::styled("Part 1: ", success_style),
-                                    Span::raw(part_1.1.clone()),
-                                ]),
-                                Spans::from(vec![
-                                    Span::styled("Part 2: ", success_style),
-                                    Span::raw(part_2.1.clone()),
-                                ]),
-                            ]
-                        }
-                    }
-                    Some(Err(error)) => vec![Spans::from(vec![
-                        Span::styled(
-                            "Error: ",
-                            Style::default()
-                                .fg(Color::Red)
-                                .add_modifier(Modifier::BOLD)
-                                .add_modifier(Modifier::RAPID_BLINK),
-                        ),
-                        Span::raw(error.clone()),
-                    ])],
-                },
-                1 => status
-                    .stdout
-                    .iter()
-                    .map(|s| Spans::from(Span::raw(s.clone())))
-                    .collect(),
-                2 => status
-                    .stderr
-                    .iter()
-                    .map(|s| Spans::from(Span::raw(s.clone())))
-                    .collect(),
-                _ => unreachable!(),
-            })
-            .unwrap_or_default();
-
-        let paragraph = Paragraph::new(contents)
+        let paragraph = Paragraph::new(self.paragraph())
             .block(Block::default().borders(Borders::LEFT | Borders::BOTTOM | Borders::RIGHT));
 
         f.render_widget(tabs, areas[0]);
@@ -131,15 +131,25 @@ impl<B: Backend> Widget<B> for ChallengeOutput {
 
     fn update(
         &mut self,
-        selected_day: Option<Selection>,
+        selected_day: Option<ListSelection>,
         runner_status: &RunnersStatus,
         _: &AdventOfCode,
     ) {
-        if let Some(day) = selected_day {
-            if let Some(status) = runner_status.get(&day) {
-                self.status = Some(status.clone());
-            }
-        }
+        self.status = selected_day.and_then(|day| match day {
+            ListSelection::Day(d) => Some(ChallengeStatus::Day(
+                runner_status
+                    .iter()
+                    .cloned()
+                    .filter(|s| s.selection.day == d)
+                    .collect(),
+            )),
+            ListSelection::Part(d, p) => runner_status
+                .iter()
+                .cloned()
+                .find(|s| s.selection.day == d && s.selection.part == p)
+                .map(ChallengeStatus::Part),
+        });
+
         self.selected_day = selected_day;
     }
 

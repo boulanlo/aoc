@@ -1,4 +1,4 @@
-use std::{any::Any, collections::HashMap};
+use std::{any::Any, cmp::Ordering, collections::HashMap};
 
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
@@ -12,7 +12,7 @@ use tui::{
 };
 
 use crate::{
-    runner::{self, RunnersStatus, Selection},
+    runner::{self, RunnersStatus},
     AdventOfCode,
 };
 
@@ -25,47 +25,182 @@ enum Status {
     Error,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ListSelection {
+    Day(usize),
+    Part(usize, usize),
+}
+
+impl ListSelection {
+    pub fn day(&self) -> usize {
+        match self {
+            ListSelection::Day(day) => *day,
+            ListSelection::Part(day, _) => *day,
+        }
+    }
+}
+
+impl PartialOrd for ListSelection {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (ListSelection::Day(d1), ListSelection::Day(d2))
+            | (ListSelection::Day(d1), ListSelection::Part(d2, _))
+            | (ListSelection::Part(d1, _), ListSelection::Day(d2)) => d1.partial_cmp(d2),
+            (ListSelection::Part(d1, p1), ListSelection::Part(d2, p2)) => {
+                d1.partial_cmp(d2).and_then(|d| {
+                    if let Ordering::Equal = d {
+                        p1.partial_cmp(p2)
+                    } else {
+                        Some(d)
+                    }
+                })
+            }
+        }
+    }
+}
+
+impl Ord for ListSelection {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (ListSelection::Day(d1), ListSelection::Day(d2))
+            | (ListSelection::Day(d1), ListSelection::Part(d2, _))
+            | (ListSelection::Part(d1, _), ListSelection::Day(d2)) => d1.cmp(d2),
+            (ListSelection::Part(d1, p1), ListSelection::Part(d2, p2)) => {
+                let c = d1.cmp(d2);
+                if let Ordering::Equal = c {
+                    p1.cmp(p2)
+                } else {
+                    c
+                }
+            }
+        }
+    }
+}
+
 pub struct ChallengeList {
     selected: ListState,
-    selecting_part: Option<usize>,
+    selections: Vec<ListSelection>,
+    available_selections: Vec<ListSelection>,
     statuses: HashMap<usize, Vec<(usize, Status)>>,
 }
 
-impl Default for ChallengeList {
-    fn default() -> Self {
+impl ChallengeList {
+    pub fn new(aoc: &AdventOfCode) -> Self {
         let mut selected = ListState::default();
         selected.select(Some(0));
         Self {
             selected,
-            selecting_part: None,
+            selections: (1..=25).map(ListSelection::Day).collect(),
+            available_selections: aoc
+                .challenges
+                .iter()
+                .enumerate()
+                .flat_map(|(i, c)| {
+                    if let Some(c) = c.as_ref() {
+                        let dataset = c.dataset();
+
+                        if dataset.example_results[1].is_some() {
+                            vec![ListSelection::Part(i + 1, 1), ListSelection::Part(i + 1, 2)]
+                        } else {
+                            vec![ListSelection::Part(i + 1, 1)]
+                        }
+                    } else {
+                        vec![]
+                    }
+                })
+                .collect(),
             statuses: HashMap::default(),
         }
     }
-}
 
-impl ChallengeList {
-    fn list_len(&self) -> usize {
-        if self.selecting_part.is_some() {
-            27
-        } else {
-            25
-        }
+    pub fn current_selection(&self) -> Option<ListSelection> {
+        self.selected
+            .selected()
+            .and_then(|x| self.selections.get(x).copied())
     }
 
-    pub fn current_selection(&self) -> Option<Selection> {
-        self.selected.selected().map(|x| {
-            if let Some(part_selection) = self.selecting_part {
-                if x <= part_selection {
-                    Selection::day(x + 1)
-                } else if x <= part_selection + 2 {
-                    Selection::part(part_selection + 1, x - part_selection)
+    fn is_day_available(&self, day: usize) -> Option<usize> {
+        self.available_selections
+            .iter()
+            .filter(|s| matches!(s, ListSelection::Part(d, _) if *d == day))
+            .map(|s| match s {
+                ListSelection::Day(_) => unreachable!(),
+                ListSelection::Part(_, part) => *part,
+            })
+            .max()
+    }
+
+    fn is_expanded(&self, day: usize) -> bool {
+        self.selections
+            .iter()
+            .any(|s| matches!(s, ListSelection::Part(d, _) if *d == day))
+    }
+
+    fn expand(&mut self, day: usize, up_to: usize) {
+        for i in 1..=up_to {
+            self.selections.push(ListSelection::Part(day, i));
+        }
+
+        self.selections.sort();
+    }
+
+    fn collapse(&mut self, day: usize) {
+        self.selections
+            .retain(|s| s.day() != day || !matches!(s, ListSelection::Part(d, _) if *d == day))
+    }
+
+    fn list(&self, aoc: &AdventOfCode) -> Vec<ListItem> {
+        self.selections
+            .iter()
+            .map(|selection| {
+                let day = selection.day();
+                let indent = " ";
+                let indicator_present = "●   ";
+                let indicator_absent = "    ";
+
+                let challenge = &aoc.challenges[day - 1];
+
+                let spans = if let Some(challenge) = challenge.as_ref() {
+                    let name = challenge.name();
+
+                    let status_indicator = self
+                        .statuses
+                        .get(&day)
+                        .map(|s| {
+                            let s = *s.iter().map(|(_, s)| s).max().unwrap();
+
+                            let style = match s {
+                                Status::Running => Style::default().fg(Color::Yellow),
+                                Status::Finished => Style::default().fg(Color::Green),
+                                Status::Error => Style::default()
+                                    .fg(Color::Red)
+                                    .add_modifier(Modifier::RAPID_BLINK),
+                            };
+
+                            Span::styled(format!("{indent}{indicator_present}"), style)
+                        })
+                        .unwrap_or_else(|| Span::raw(format!("{indent}{indicator_absent}")));
+
+                    match selection {
+                        ListSelection::Day(_) => {
+                            Spans::from(vec![status_indicator, Span::raw(format!("{day} {name}"))])
+                        }
+                        ListSelection::Part(_, part) => Spans::from(vec![
+                            Span::raw("  "),
+                            status_indicator,
+                            Span::raw(format!(" Part {part}")),
+                        ]),
+                    }
                 } else {
-                    Selection::day(x - 1)
-                }
-            } else {
-                Selection::day(x + 1)
-            }
-        })
+                    Spans::from(Span::styled(
+                        format!("{indent}{indicator_absent}{day}"),
+                        Style::default().fg(Color::DarkGray),
+                    ))
+                };
+
+                ListItem::new(spans)
+            })
+            .collect()
     }
 }
 
@@ -74,90 +209,7 @@ impl<B: Backend> Widget<B> for ChallengeList {
     where
         B: Backend,
     {
-        let challenges = aoc
-            .challenges
-            .iter()
-            .enumerate()
-            .flat_map(|(idx, challenge)| {
-                let day = idx + 1;
-
-                let style = if challenge.is_some() {
-                    Style::default()
-                } else {
-                    Style::default().fg(Color::DarkGray)
-                };
-
-                let status_indicator = self
-                    .statuses
-                    .get(&day)
-                    .map(|s| {
-                        let s = *s.iter().map(|(_, s)| s).max().unwrap();
-
-                        let style = match s {
-                            Status::Running => Style::default().fg(Color::Yellow),
-                            Status::Finished => Style::default().fg(Color::Green),
-                            Status::Error => Style::default()
-                                .fg(Color::Red)
-                                .add_modifier(Modifier::RAPID_BLINK),
-                        };
-
-                        Span::styled("● ", style)
-                    })
-                    .unwrap_or_else(|| Span::raw("  "));
-
-                let day_item = ListItem::new(if let Some(challenge) = challenge.as_ref() {
-                    Spans::from(vec![
-                        status_indicator,
-                        Span::styled(format!("{day:2} "), style),
-                        Span::styled(challenge.name(), style),
-                    ])
-                } else {
-                    Spans::from(Span::styled(format!("  {day:2} "), style))
-                });
-
-                if let Some(selected_idx) = self.selecting_part {
-                    if selected_idx == idx {
-                        let status_indicators = self
-                            .statuses
-                            .get(&day)
-                            .map(|s| {
-                                s.iter()
-                                    .map(|(_, s)| {
-                                        let style = match s {
-                                            Status::Running => Style::default().fg(Color::Yellow),
-                                            Status::Finished => Style::default().fg(Color::Green),
-                                            Status::Error => Style::default()
-                                                .fg(Color::Red)
-                                                .add_modifier(Modifier::RAPID_BLINK),
-                                        };
-
-                                        Span::styled("   ● ", style)
-                                    })
-                                    .collect::<Vec<_>>()
-                            })
-                            .unwrap_or_else(|| vec![Span::raw("  "), Span::raw("  ")]);
-
-                        vec![
-                            day_item,
-                            ListItem::new(Spans::from(vec![
-                                status_indicators[0].clone(),
-                                Span::styled(" Part 1", style),
-                            ])),
-                            ListItem::new(Spans::from(vec![
-                                status_indicators[1].clone(),
-                                Span::styled(" Part 2", style),
-                            ])),
-                        ]
-                    } else {
-                        vec![day_item]
-                    }
-                } else {
-                    vec![day_item]
-                }
-            })
-            .collect::<Vec<_>>();
-
-        let list = List::new(challenges)
+        let list = List::new(self.list(aoc))
             .block(
                 Block::default()
                     .borders(Borders::ALL)
@@ -179,78 +231,34 @@ impl<B: Backend> Widget<B> for ChallengeList {
             KeyCode::Down => self.selected.select(Some(
                 self.selected
                     .selected()
-                    .map(|x| (x + 1) % self.list_len())
+                    .map(|x| (x + 1) % self.selections.len())
                     .unwrap_or(0),
             )),
             KeyCode::Up => self.selected.select(Some(
                 self.selected
                     .selected()
-                    .map(|x| if x == 0 { self.list_len() - 1 } else { x - 1 })
-                    .unwrap_or(self.list_len() - 1),
+                    .map(|x| {
+                        if x == 0 {
+                            self.selections.len() - 1
+                        } else {
+                            x - 1
+                        }
+                    })
+                    .unwrap_or(self.selections.len() - 1),
             )),
             KeyCode::Char(' ') => {
-                let new_selecting_part = if let Some(current) = self.selecting_part {
-                    let new = self.selected.selected().map(|x| {
-                        if x <= current {
-                            x
-                        } else {
-                            x.saturating_sub((x - current).min(2))
-                        }
-                    });
+                if let Some(selected) = self.selected.selected() {
+                    let current = self.selections[selected];
 
-                    if let Some(new) = new {
-                        if new > current {
-                            self.selected
-                                .select(self.selected.selected().map(|x| x - 2));
-                        }
-                    }
-
-                    new
-                } else {
-                    self.selected.selected()
-                };
-
-                if self.selecting_part == new_selecting_part && self.selecting_part.is_some() {
-                    self.selecting_part = None;
-                } else {
-                    self.selecting_part = new_selecting_part;
-                }
-            }
-            KeyCode::Right => {
-                self.selecting_part = if let Some(current) = self.selecting_part {
-                    let new = self.selected.selected().map(|x| {
-                        if x <= current {
-                            x
-                        } else {
-                            x.saturating_sub((x - current).min(2))
-                        }
-                    });
-
-                    if let Some(new) = new {
-                        if new > current {
-                            self.selected
-                                .select(self.selected.selected().map(|x| x - 2));
-                        }
-                    }
-
-                    new
-                } else {
-                    self.selected.selected()
-                };
-            }
-            KeyCode::Left => {
-                if let Some(old_selected) = self.selecting_part.take() {
-                    if let Some(x) = self.selected.selected() {
-                        if x >= self.list_len() {
-                            self.selected.select(Some(self.list_len() - 1))
-                        }
-                        self.selected.select(self.selected.selected().map(|x| {
-                            if x <= old_selected {
-                                x
-                            } else {
-                                x.saturating_sub((x - old_selected).min(2))
-                            }
-                        }));
+                    if self.is_expanded(current.day()) {
+                        self.collapse(current.day());
+                        self.selected.select(
+                            self.selections
+                                .iter()
+                                .position(|s| s.day() == current.day()),
+                        );
+                    } else if let Some(up_to) = self.is_day_available(current.day()) {
+                        self.expand(current.day(), up_to)
                     }
                 }
             }
@@ -268,7 +276,12 @@ impl<B: Backend> Widget<B> for ChallengeList {
         format!(" {} ", aoc.name)
     }
 
-    fn update(&mut self, _: Option<Selection>, runner_status: &RunnersStatus, _: &AdventOfCode) {
+    fn update(
+        &mut self,
+        _: Option<ListSelection>,
+        runner_status: &RunnersStatus,
+        _: &AdventOfCode,
+    ) {
         fn kind_from_status(status: &runner::Status) -> Status {
             match status.result {
                 None => Status::Running,
@@ -277,29 +290,17 @@ impl<B: Backend> Widget<B> for ChallengeList {
             }
         }
 
-        for (selection, status) in runner_status {
+        for status in runner_status {
             self.statuses
-                .entry(selection.day)
+                .entry(status.selection.day)
                 .and_modify(|s| {
-                    if let Some(part) = selection.part {
-                        if let Some((_, s)) = s.iter_mut().find(|(p, _)| *p == part) {
-                            *s = kind_from_status(status)
-                        } else {
-                            s.push((part, kind_from_status(status)))
-                        }
+                    if let Some((_, s)) = s.iter_mut().find(|(p, _)| *p == status.selection.part) {
+                        *s = kind_from_status(status)
                     } else {
-                        s.iter_mut()
-                            .for_each(|(_, s)| *s = kind_from_status(status))
+                        s.push((status.selection.part, kind_from_status(status)))
                     }
                 })
-                .or_insert_with(|| {
-                    if let Some(part) = selection.part {
-                        vec![(part, kind_from_status(status))]
-                    } else {
-                        let s = kind_from_status(status);
-                        vec![(1, s), (2, s)]
-                    }
-                });
+                .or_insert_with(|| vec![(status.selection.part, kind_from_status(status))]);
         }
     }
 

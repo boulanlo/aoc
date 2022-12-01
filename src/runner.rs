@@ -14,19 +14,16 @@ use crate::Challenge;
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Default)]
 pub struct Selection {
     pub(crate) day: usize,
-    pub(crate) part: Option<usize>,
+    pub(crate) part: usize,
 }
 
 impl Selection {
-    pub fn day(day: usize) -> Self {
-        Self { day, part: None }
+    pub fn day(day: usize) -> Vec<Self> {
+        vec![Self::part(day, 1), Self::part(day, 2)]
     }
 
     pub fn part(day: usize, part: usize) -> Self {
-        Self {
-            day,
-            part: Some(part),
-        }
+        Self { day, part }
     }
 }
 
@@ -112,9 +109,10 @@ fn messenger() -> (Messenger, MessengerReceiver) {
 
 #[derive(Default, Clone)]
 pub struct Status {
+    pub(crate) selection: Selection,
     pub(crate) stdout: Vec<String>,
     pub(crate) stderr: Vec<String>,
-    pub(crate) result: Option<Result<Vec<(usize, String)>, String>>,
+    pub(crate) result: Option<Result<String, String>>,
 }
 
 impl Status {
@@ -133,7 +131,7 @@ pub struct Runner {
     current_task_rx: Receiver<Selection>,
     current_task: Option<Selection>,
     msg_rx: MessengerReceiver,
-    result_rx: Receiver<(Selection, EResult<Vec<(usize, String)>>)>,
+    result_rx: Receiver<(Selection, EResult<String>)>,
 }
 
 impl Runner {
@@ -151,29 +149,11 @@ impl Runner {
 
             current_task_tx.send(task.selection)?;
 
-            let result = task
-                .selection
-                .part
-                .map(|a| match a {
-                    1 => task
-                        .challenge
-                        .part_1_verified(&mut messenger)
-                        .map(|p1| vec![(1, p1)]),
-                    2 => task
-                        .challenge
-                        .part_2_verified(&mut messenger)
-                        .map(|p2| vec![(2, p2)]),
-                    _ => unreachable!(),
-                })
-                .unwrap_or_else(|| {
-                    task.challenge
-                        .part_1_verified(&mut messenger)
-                        .and_then(|p1| {
-                            task.challenge
-                                .part_2_verified(&mut messenger)
-                                .map(|p2| vec![(1, p1), (2, p2)])
-                        })
-                });
+            let result = match task.selection.part {
+                1 => task.challenge.part_1_verified(&mut messenger),
+                2 => task.challenge.part_2_verified(&mut messenger),
+                _ => unreachable!(),
+            };
 
             result_tx.send((task.selection, result))?;
         });
@@ -193,7 +173,7 @@ impl Runner {
         Ok(())
     }
 
-    pub fn update(&mut self) -> EResult<Option<(Selection, Status)>> {
+    pub fn update(&mut self) -> EResult<Option<Status>> {
         let (result_selection, result) = match self.result_rx.try_recv() {
             Ok((selection, res)) => {
                 self.current_task = None;
@@ -214,23 +194,19 @@ impl Runner {
         }
 
         if result.is_some() {
-            Ok(Some((
-                result_selection.unwrap(),
-                Status {
-                    stdout: self.msg_rx.receive_stdout()?,
-                    stderr: self.msg_rx.receive_stderr()?,
-                    result,
-                },
-            )))
+            Ok(Some(Status {
+                selection: result_selection.unwrap(),
+                stdout: self.msg_rx.receive_stdout()?,
+                stderr: self.msg_rx.receive_stderr()?,
+                result,
+            }))
         } else if let Some(selection) = self.current_task {
-            Ok(Some((
+            Ok(Some(Status {
                 selection,
-                Status {
-                    stdout: self.msg_rx.receive_stdout()?,
-                    stderr: self.msg_rx.receive_stderr()?,
-                    result,
-                },
-            )))
+                stdout: self.msg_rx.receive_stdout()?,
+                stderr: self.msg_rx.receive_stderr()?,
+                result,
+            }))
         } else {
             Ok(None)
         }
@@ -250,7 +226,7 @@ impl Drop for Runner {
     }
 }
 
-pub type RunnersStatus = HashMap<Selection, Status>;
+pub type RunnersStatus = Vec<Status>;
 
 pub struct Pool {
     runners: Vec<Runner>,
@@ -282,11 +258,11 @@ impl Pool {
 
     pub fn update(&mut self, current: &mut RunnersStatus) -> EResult<()> {
         for runner in self.runners.iter_mut() {
-            if let Some((selection, result)) = runner.update()? {
-                if let Some(r) = current.get_mut(&selection) {
+            if let Some(result) = runner.update()? {
+                if let Some(r) = current.iter_mut().find(|r| r.selection == result.selection) {
                     r.merge(result);
                 } else {
-                    current.insert(selection, result);
+                    current.push(result);
                 }
             }
         }

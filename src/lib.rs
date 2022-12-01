@@ -28,24 +28,25 @@ pub trait Challenge {
         let dataset = self.dataset();
         self.part_1(&dataset.example_data, messenger)
             .and_then(|example_result| {
-                if example_result == dataset.example_results[0] {
-                    self.part_1(&dataset.real_data, messenger).and_then(|real_result| {
+                if example_result == *dataset.example_results[0].as_ref().unwrap() {
+                    self.part_1(dataset.real_data.as_deref().unwrap(), messenger).and_then(|real_result| {
+                        let result = format!("{real_result} (example: {example_result})");
                         if let Some(real_expected_result) = dataset.real_results[0].as_ref() {
                             if *real_expected_result == real_result {
-                                Ok(real_result)
+                                Ok(result)
                             } else {
                                 Err(color_eyre::eyre::eyre!(
                                     "Part 1: Real expected result (\"{real_expected_result}\") different from computed one (\"{real_result}\")",
                                 ))
                             }
                         } else {
-                            Ok(real_result)
+                            Ok(result)
                         }
                     })
                 } else {
                     Err(color_eyre::eyre::eyre!(
                         "Part 1: Example result (\"{}\") different from computed one (\"{example_result}\")",
-                        dataset.example_results[0]
+                        dataset.example_results[0].as_ref().unwrap()
                     ))
                 }
             })
@@ -55,24 +56,25 @@ pub trait Challenge {
         let dataset = self.dataset();
         self.part_2(&dataset.example_data, messenger)
             .and_then(|example_result| {
-                if example_result == dataset.example_results[1] {
-                    self.part_2(&dataset.real_data, messenger).and_then(|real_result| {
+                if example_result == *dataset.example_results[1].as_ref().unwrap() {
+                    self.part_2(dataset.real_data.as_deref().unwrap(), messenger).and_then(|real_result| {
+                        let result = format!("{real_result} (example: {example_result})");
                         if let Some(real_expected_result) = dataset.real_results[1].as_ref() {
                             if *real_expected_result == real_result {
-                                Ok(real_result)
+                                Ok(result)
                             } else {
                                 Err(color_eyre::eyre::eyre!(
                                     "Part 2: Real expected result (\"{real_expected_result}\") different from computed one (\"{real_result}\")",
                                 ))
                             }
                         } else {
-                            Ok(real_result)
+                            Ok(result)
                         }
                     })
                 } else {
                     Err(color_eyre::eyre::eyre!(
                         "Part 2: Example result (\"{}\") different from computed one (\"{example_result}\")",
-                        dataset.example_results[1]
+                        dataset.example_results[1].as_ref().unwrap()
                     ))
                 }
             })
@@ -140,22 +142,20 @@ impl DataConfiguration {
                 p
             })?,
             example_results: [
-                read_file({
+                read_file_optional({
                     let mut p = day_directory.clone();
                     p.push("example_expected_1.txt");
                     p
                 })?
-                .pop()
-                .unwrap(),
-                read_file({
+                .map(|mut f| f.pop().unwrap()),
+                read_file_optional({
                     let mut p = day_directory.clone();
                     p.push("example_expected_2.txt");
                     p
                 })?
-                .pop()
-                .unwrap(),
+                .map(|mut f| f.pop().unwrap()),
             ],
-            real_data: read_file({
+            real_data: read_file_optional({
                 let mut p = day_directory.clone();
                 p.push("real_data.txt");
                 p
@@ -181,8 +181,8 @@ impl DataConfiguration {
 #[derive(Debug, Clone)]
 pub struct Dataset {
     pub(crate) example_data: Vec<String>,
-    pub(crate) example_results: [String; 2],
-    pub(crate) real_data: Vec<String>,
+    pub(crate) example_results: [Option<String>; 2],
+    pub(crate) real_data: Option<Vec<String>>,
     pub(crate) real_results: [Option<String>; 2],
 }
 
@@ -215,9 +215,16 @@ impl AdventOfCode {
     }
 
     pub fn task_for(&self, selection: Selection) -> Option<Task> {
-        self.challenges[selection.day - 1].as_ref().map(|c| Task {
-            selection,
-            challenge: c.clone(),
+        self.challenges[selection.day - 1].as_ref().and_then(|c| {
+            let dataset = c.dataset();
+            if selection.part == 2 && dataset.example_results[1].is_none() {
+                None
+            } else {
+                Some(Task {
+                    selection,
+                    challenge: c.clone(),
+                })
+            }
         })
     }
 }

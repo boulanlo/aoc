@@ -18,7 +18,7 @@ impl Challenge for Day1 {
         "Sonar Sweep"
     }
 
-    fn part_1(&self, data: &[String], messenger: &mut Messenger) -> Result<String> {
+    fn part_1(&self, data: &[String], _: &mut Messenger) -> Result<String> {
         let result = data
             .iter()
             .map(|s| s.parse::<u32>().unwrap())
@@ -34,7 +34,7 @@ impl Challenge for Day1 {
         Ok(format!("{result}"))
     }
 
-    fn part_2(&self, data: &[String], messenger: &mut Messenger) -> Result<String> {
+    fn part_2(&self, data: &[String], _: &mut Messenger) -> Result<String> {
         let result = data
             .iter()
             .map(|s| s.parse::<u32>().unwrap())

@@ -7,6 +7,7 @@ use crate::DataConfiguration;
 use super::Year;
 
 mod day1;
+mod day2;
 
 pub struct Year2021;
 
@@ -18,7 +19,9 @@ impl Year for Year2021 {
             Some(Arc::new(day1::Day1::new(
                 data_config.get_dataset("2021", "1")?,
             ))),
-            None,
+            Some(Arc::new(day2::Day2::new(
+                data_config.get_dataset("2021", "2")?,
+            ))),
             None,
             None,
             None,

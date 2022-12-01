@@ -24,10 +24,9 @@ use crate::{
     AdventOfCode,
 };
 
-use self::list::ChallengeList;
-
 mod input;
 mod list;
+use list::{ChallengeList, ListSelection};
 mod output;
 
 trait Widget<B> {
@@ -43,7 +42,7 @@ trait Widget<B> {
     #[allow(unused_variables)]
     fn update(
         &mut self,
-        selected_day: Option<Selection>,
+        selected_day: Option<ListSelection>,
         runner_status: &RunnersStatus,
         aoc: &AdventOfCode,
     ) {
@@ -82,11 +81,12 @@ pub struct UI<B> {
 
 impl<B: Backend> UI<B> {
     pub(crate) fn new(aoc: AdventOfCode) -> Self {
+        let list = list::ChallengeList::new(&aoc);
         Self {
             aoc,
             selected_widget: WidgetKind::default(),
             widgets: vec![
-                Box::new(list::ChallengeList::default()),
+                Box::new(list),
                 Box::new(input::DatasetInput::default()),
                 Box::new(output::ChallengeOutput::default()),
             ],
@@ -129,7 +129,7 @@ impl<B: Backend> UI<B> {
         Ok(())
     }
 
-    fn get_day_selection(&self) -> Option<Selection> {
+    fn get_day_selection(&self) -> Option<ListSelection> {
         self.widgets
             .iter()
             .find_map(|w| {
@@ -212,7 +212,12 @@ impl<B: Backend> UI<B> {
                 .aoc
                 .available_challenges()
                 .into_iter()
-                .map(|day| self.aoc.task_for(Selection::day(day)).unwrap())
+                .flat_map(|day| {
+                    Selection::day(day)
+                        .into_iter()
+                        .map(|s| self.aoc.task_for(s))
+                })
+                .flatten()
             {
                 self.pool.send_task(task)?;
             }
