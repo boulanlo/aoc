@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
 use color_eyre::{Report, Result};
-use itertools::Itertools;
 
 use crate::{runner::Messenger, Challenge, Dataset};
 

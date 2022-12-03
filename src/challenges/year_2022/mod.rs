@@ -10,6 +10,7 @@ pub struct Year2022;
 
 mod day1;
 mod day2;
+mod day3;
 
 impl Year for Year2022 {
     fn challenges(
@@ -22,7 +23,9 @@ impl Year for Year2022 {
             Some(Arc::new(day2::Day2::new(
                 data_config.get_dataset("2022", "2")?,
             ))),
-            None,
+            Some(Arc::new(day3::Day3::new(
+                data_config.get_dataset("2022", "3")?,
+            ))),
             None,
             None,
             None,
