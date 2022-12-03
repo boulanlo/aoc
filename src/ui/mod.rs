@@ -24,10 +24,15 @@ use crate::{
     AdventOfCode,
 };
 
+mod bindings;
 mod input;
 mod list;
 use list::{ChallengeList, ListSelection};
+
+use self::bindings::Keymap;
 mod output;
+mod popup;
+use popup::Popup;
 
 trait Widget<B> {
     fn draw(&mut self, f: &mut Frame<B>, area: Rect, aoc: &AdventOfCode, selected: bool)
@@ -70,6 +75,19 @@ enum WidgetKind {
     ChallengeOutput,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum UIAction {
+    Nothing,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+enum State {
+    #[default]
+    Normal,
+    ShowHelp,
+    ShowWidgetHelp(WidgetKind),
+}
+
 pub struct UI<B> {
     aoc: AdventOfCode,
     widgets: Vec<Box<dyn Widget<B>>>,
@@ -77,6 +95,7 @@ pub struct UI<B> {
     pool: Pool,
     runner_status: RunnersStatus,
     should_quit: bool,
+    state: State,
 }
 
 impl<B: Backend> UI<B> {
@@ -93,7 +112,91 @@ impl<B: Backend> UI<B> {
             pool: Pool::new(4),
             runner_status: RunnersStatus::default(),
             should_quit: false,
+            state: State::Normal,
         }
+    }
+
+    fn select_widget(&mut self, which: WidgetKind) {
+        self.selected_widget = which;
+    }
+
+    fn keymap<'a>() -> Keymap<'a, Self, Result<UIAction>> {
+        Keymap::<Self, Result<UIAction>>::default()
+            .add_binding(
+                'q',
+                |u| {
+                    u.should_quit = true;
+                    Ok(UIAction::Nothing)
+                },
+                "Quit the program",
+            )
+            .copy_bindings('q', KeyCode::Esc)
+            .add_binding(
+                'l',
+                |u| {
+                    u.select_widget(WidgetKind::ChallengeList);
+                    Ok(UIAction::Nothing)
+                },
+                "Navigate to the list of challenges",
+            )
+            .add_binding(
+                'd',
+                |u| {
+                    u.select_widget(WidgetKind::DatasetInput);
+                    Ok(UIAction::Nothing)
+                },
+                "Navigate to the dataset widget",
+            )
+            .add_binding(
+                'o',
+                |u| {
+                    u.select_widget(WidgetKind::ChallengeOutput);
+                    Ok(UIAction::Nothing)
+                },
+                "Navigate to the output widget",
+            )
+            .add_binding(
+                'a',
+                |u| {
+                    u.run_all()?;
+                    Ok(UIAction::Nothing)
+                },
+                "Run all challenges",
+            )
+            .add_binding(
+                KeyCode::Right,
+                |u| {
+                    u.selected_widget = match u.selected_widget {
+                        WidgetKind::ChallengeList | WidgetKind::DatasetInput => {
+                            WidgetKind::DatasetInput
+                        }
+                        WidgetKind::ChallengeOutput => WidgetKind::ChallengeOutput,
+                    };
+                    Ok(UIAction::Nothing)
+                },
+                "Navigate to the widget to the right",
+            )
+            .add_binding(
+                KeyCode::Left,
+                |u| {
+                    u.selected_widget = match u.selected_widget {
+                        WidgetKind::ChallengeList
+                        | WidgetKind::DatasetInput
+                        | WidgetKind::ChallengeOutput => WidgetKind::ChallengeList,
+                    };
+                    Ok(UIAction::Nothing)
+                },
+                "Navigate to the widget to the left",
+            )
+            .add_binding(
+                'h',
+                |u| {
+                    u.state = State::ShowHelp;
+                    Ok(UIAction::Nothing)
+                },
+                "Display this help message",
+            )
+            .copy_bindings('h', '?')
     }
 
     fn layout(&self, area: Rect) -> HashMap<WidgetKind, Rect> {
@@ -123,6 +226,12 @@ impl<B: Backend> UI<B> {
             for w in self.widgets.iter_mut() {
                 let selected = w.kind() == self.selected_widget;
                 w.draw(f, *layout.get(&w.kind()).unwrap(), &self.aoc, selected);
+            }
+
+            match self.state {
+                State::Normal => {}
+                State::ShowHelp => Self::keymap().popup().draw(f, f.size()),
+                State::ShowWidgetHelp(_) => todo!(),
             }
         })?;
 
@@ -155,33 +264,17 @@ impl<B: Backend> UI<B> {
     fn handle_input(&mut self) -> Result<()> {
         while event::poll(Duration::from_secs(0))? {
             if let Event::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Char('q') | KeyCode::Esc => self.should_quit = true,
-                    KeyCode::Char('l') => self.selected_widget = WidgetKind::ChallengeList,
-                    KeyCode::Char('d') => self.selected_widget = WidgetKind::DatasetInput,
-                    KeyCode::Char('o') => self.selected_widget = WidgetKind::ChallengeOutput,
-                    KeyCode::Char('a') => self.run_all()?,
-                    KeyCode::Right => {
-                        self.selected_widget = match self.selected_widget {
-                            WidgetKind::ChallengeList | WidgetKind::DatasetInput => {
-                                WidgetKind::DatasetInput
-                            }
-                            WidgetKind::ChallengeOutput => WidgetKind::ChallengeOutput,
+                if self.state != State::Normal {
+                    self.state = State::Normal
+                } else {
+                    let keymap = Self::keymap();
+                    if let Some(res) = keymap.handle_input(self, key.code) {
+                        match res? {
+                            UIAction::Nothing => {}
                         }
-                    }
-                    KeyCode::Left => {
-                        self.selected_widget = match self.selected_widget {
-                            WidgetKind::ChallengeList
-                            | WidgetKind::DatasetInput
-                            | WidgetKind::ChallengeOutput => WidgetKind::ChallengeList,
-                        }
-                    }
-
-                    _ => {
-                        if let Some(widget) = self.get_selected_widget() {
-                            if widget.handle_input(key)? {
-                                self.should_quit = true;
-                            }
+                    } else if let Some(widget) = self.get_selected_widget() {
+                        if widget.handle_input(key)? {
+                            self.should_quit = true;
                         }
                     }
                 }
