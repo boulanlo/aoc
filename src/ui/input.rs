@@ -92,11 +92,25 @@ impl DatasetInput {
     fn contents(&self) -> Vec<ListItem> {
         if let Some(dataset) = &self.current_dataset {
             match self.selected_data {
-                0 => dataset
-                    .example_data
-                    .iter()
-                    .map(|s| ListItem::new(Span::raw(s)))
-                    .collect(),
+                0 => {
+                    let len = dataset.example_data.len();
+                    let digits = (len as f64).log10().round() as usize + 1;
+
+                    dataset
+                        .example_data
+                        .iter()
+                        .enumerate()
+                        .map(|(i, s)| {
+                            ListItem::new(Spans::from(vec![
+                                Span::styled(
+                                    format!("{:digits$} ", i + 1),
+                                    Style::default().fg(Color::DarkGray),
+                                ),
+                                Span::raw(s),
+                            ]))
+                        })
+                        .collect()
+                }
                 1 => {
                     if let Some(s) = dataset.example_results[0].as_ref() {
                         vec![ListItem::new(Span::raw(s))]
@@ -113,7 +127,20 @@ impl DatasetInput {
                 }
                 3 => {
                     if let Some(s) = dataset.real_data.as_ref() {
-                        s.iter().map(|s| ListItem::new(Span::raw(s))).collect()
+                        let len = s.len();
+                        let digits = (len as f64).log10().round() as usize;
+                        s.iter()
+                            .enumerate()
+                            .map(|(i, s)| {
+                                ListItem::new(Spans::from(vec![
+                                    Span::styled(
+                                        format!("{:digits$} ", i + 1),
+                                        Style::default().fg(Color::DarkGray),
+                                    ),
+                                    Span::raw(s),
+                                ]))
+                            })
+                            .collect()
                     } else {
                         vec![]
                     }

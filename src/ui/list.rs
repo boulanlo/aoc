@@ -192,9 +192,10 @@ impl ChallengeList {
                         .unwrap_or_else(|| Span::raw(format!("{indent}{indicator_absent}")));
 
                     match selection {
-                        ListSelection::Day(_) => {
-                            Spans::from(vec![status_indicator, Span::raw(format!("{day} {name}"))])
-                        }
+                        ListSelection::Day(_) => Spans::from(vec![
+                            status_indicator,
+                            Span::raw(format!("{day:2} {name}")),
+                        ]),
                         ListSelection::Part(_, part) => Spans::from(vec![
                             Span::raw("  "),
                             status_indicator,
@@ -203,7 +204,7 @@ impl ChallengeList {
                     }
                 } else {
                     Spans::from(Span::styled(
-                        format!("{indent}{indicator_absent}{day}"),
+                        format!("{indent}{indicator_absent}{day:2}"),
                         Style::default().fg(Color::DarkGray),
                     ))
                 };
