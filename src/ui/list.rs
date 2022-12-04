@@ -414,6 +414,7 @@ impl<B: Backend> Widget<B> for ChallengeList {
                             ('v', String::from("Run and output results, verify against example")).into(),
                             ('a', String::from("Run and output results, verify against example and real results (if present)")).into()
                         ],
+                        accepted_inputs: Some(vec![String::from("r"), String::from("v"), String::from("a")])
                     }))
                 },
                 "Run selected challenges",

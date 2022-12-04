@@ -243,11 +243,12 @@ impl<B: Backend> UI<B> {
                         .as_any_mut()
                         .downcast_mut::<minibuffer::Minibuffer>()
                         .unwrap();
-                    let response = minibuffer.finish();
 
-                    u.select_widget(response.origin);
-                    let widget = u.get_widget(response.origin);
-                    widget.handle_text_input_response(response)
+                    if let Some(response) = minibuffer.finish() {
+                        u.handle_input_response(response)
+                    } else {
+                        Ok(UIAction::Nothing)
+                    }
                 },
                 "Finish text input",
             )
@@ -387,6 +388,12 @@ impl<B: Backend> UI<B> {
         Ok(())
     }
 
+    fn handle_input_response(&mut self, response: TextInputResponse) -> Result<UIAction> {
+        self.select_widget(response.origin);
+        let widget = self.get_widget(response.origin);
+        widget.handle_text_input_response(response)
+    }
+
     fn handle_input(&mut self) -> Result<()> {
         while event::poll(Duration::from_secs(0))? {
             if let Event::Key(key) = event::read()? {
@@ -404,7 +411,10 @@ impl<B: Backend> UI<B> {
                             .downcast_mut::<minibuffer::Minibuffer>()
                             .unwrap();
                         if let KeyCode::Char(c) = key.code {
-                            minibuffer.push(c)
+                            if let Some(response) = minibuffer.push(c) {
+                                let action = self.handle_input_response(response)?;
+                                self.handle_action(action)?;
+                            }
                         }
                     }
                 } else {
