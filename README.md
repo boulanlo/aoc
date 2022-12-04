@@ -51,7 +51,6 @@ data
 - [ ] Run a single day or part, or select those to run
 - [ ] Multiple versions of same day, with selection of which to run
 - [ ] Variable interface (menus, etc)
-- [ ] "Modal" navigation? (Normal mode to move between windows, interaction mode to interact with them?)
 - [ ] Optional visualisation capability
 - [ ] Command-line arguments to just run a day/part, generate a day template, etc...
 - [ ] Code documentation

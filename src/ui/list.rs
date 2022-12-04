@@ -1,4 +1,8 @@
-use std::{any::Any, cmp::Ordering, collections::HashMap};
+use std::{
+    any::Any,
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+};
 
 use color_eyre::Result;
 use crossterm::event::KeyCode;
@@ -12,7 +16,7 @@ use tui::{
 };
 
 use crate::{
-    runner::{self, RunnersStatus},
+    runner::{self, RunnersStatus, Selection},
     AdventOfCode,
 };
 
@@ -29,6 +33,21 @@ enum Status {
 pub enum ListSelection {
     Day(usize),
     Part(usize, usize),
+}
+
+impl From<Selection> for ListSelection {
+    fn from(s: Selection) -> Self {
+        ListSelection::Part(s.day, s.part)
+    }
+}
+
+impl From<ListSelection> for Vec<Selection> {
+    fn from(s: ListSelection) -> Self {
+        match s {
+            ListSelection::Day(d) => Selection::day(d),
+            ListSelection::Part(d, p) => vec![Selection::part(d, p)],
+        }
+    }
 }
 
 impl ListSelection {
@@ -78,9 +97,10 @@ impl Ord for ListSelection {
 }
 
 pub struct ChallengeList {
-    selected: ListState,
+    list_item_selected: ListState,
     selections: Vec<ListSelection>,
     available_selections: Vec<ListSelection>,
+    selected_challenges: HashSet<ListSelection>,
     statuses: HashMap<ListSelection, Status>,
 }
 
@@ -89,7 +109,7 @@ impl ChallengeList {
         let mut selected = ListState::default();
         selected.select(Some(0));
         Self {
-            selected,
+            list_item_selected: selected,
             selections: (1..=25).map(ListSelection::Day).collect(),
             available_selections: aoc
                 .challenges
@@ -109,12 +129,13 @@ impl ChallengeList {
                     }
                 })
                 .collect(),
+            selected_challenges: HashSet::default(),
             statuses: HashMap::default(),
         }
     }
 
     pub fn current_selection(&self) -> Option<ListSelection> {
-        self.selected
+        self.list_item_selected
             .selected()
             .and_then(|x| self.selections.get(x).copied())
     }
@@ -163,8 +184,11 @@ impl ChallengeList {
             .map(|selection| {
                 let day = selection.day();
                 let indent = " ";
-                let indicator_present = "●   ";
-                let indicator_absent = "    ";
+                let indicator_present = "● ";
+                let indicator_absent = "  ";
+
+                let selected_present = " S ";
+                let selected_absent = "   ";
 
                 let challenge = &aoc.challenges[day - 1];
 
@@ -176,6 +200,28 @@ impl ChallengeList {
                     } else {
                         self.statuses.get(selection).copied()
                     };
+
+                    let selected_indicator = Span::styled(
+                        if self.selected_challenges.contains(selection)
+                            || (matches!(selection, ListSelection::Day(_))
+                                && self
+                                    .selected_challenges
+                                    .contains(&ListSelection::Part(selection.day(), 1))
+                                && self
+                                    .available_selections
+                                    .contains(&ListSelection::Part(selection.day(), 2))
+                                && self
+                                    .selected_challenges
+                                    .contains(&ListSelection::Part(selection.day(), 2)))
+                        {
+                            selected_present
+                        } else {
+                            selected_absent
+                        },
+                        Style::default()
+                            .fg(Color::Magenta)
+                            .add_modifier(Modifier::BOLD),
+                    );
 
                     let status_indicator = status
                         .map(|s| {
@@ -193,18 +239,20 @@ impl ChallengeList {
 
                     match selection {
                         ListSelection::Day(_) => Spans::from(vec![
+                            selected_indicator,
                             status_indicator,
                             Span::raw(format!("{day:2} {name}")),
                         ]),
                         ListSelection::Part(_, part) => Spans::from(vec![
                             Span::raw("  "),
+                            selected_indicator,
                             status_indicator,
                             Span::raw(format!(" Part {part}")),
                         ]),
                     }
                 } else {
                     Spans::from(Span::styled(
-                        format!("{indent}{indicator_absent}{day:2}"),
+                        format!("{indent}{selected_absent}{indicator_absent}{day:2}"),
                         Style::default().fg(Color::DarkGray),
                     ))
                 };
@@ -224,11 +272,16 @@ impl<B: Backend> Widget<B> for ChallengeList {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
+                    .border_style(if selected {
+                        Style::default().fg(Color::Cyan)
+                    } else {
+                        Style::default()
+                    })
                     .title(<Self as Widget<B>>::title(self, aoc, selected)),
             )
             .highlight_symbol(" > ");
 
-        let mut state = self.selected.clone();
+        let mut state = self.list_item_selected.clone();
 
         f.render_stateful_widget(list, area, &mut state);
     }
@@ -239,12 +292,13 @@ impl<B: Backend> Widget<B> for ChallengeList {
 
     fn keymap(&self) -> Keymap<'static, dyn Any, Result<UIAction>> {
         Keymap::<dyn Any, _>::default()
+            .with_name("Challenge list")
             .add_binding(
                 KeyCode::Down,
                 |s| {
                     let s: &mut Self = s.downcast_mut().unwrap();
-                    s.selected.select(Some(
-                        s.selected
+                    s.list_item_selected.select(Some(
+                        s.list_item_selected
                             .selected()
                             .map(|x| (x + 1) % s.selections.len())
                             .unwrap_or(0),
@@ -257,8 +311,8 @@ impl<B: Backend> Widget<B> for ChallengeList {
                 KeyCode::Up,
                 |s| {
                     let s: &mut Self = s.downcast_mut().unwrap();
-                    s.selected.select(Some(
-                        s.selected
+                    s.list_item_selected.select(Some(
+                        s.list_item_selected
                             .selected()
                             .map(|x| {
                                 if x == 0 {
@@ -277,12 +331,12 @@ impl<B: Backend> Widget<B> for ChallengeList {
                 ' ',
                 |s| {
                     let s: &mut Self = s.downcast_mut().unwrap();
-                    if let Some(selected) = s.selected.selected() {
+                    if let Some(selected) = s.list_item_selected.selected() {
                         let current = s.selections[selected];
 
                         if s.is_expanded(current.day()) {
                             s.collapse(current.day());
-                            s.selected
+                            s.list_item_selected
                                 .select(s.selections.iter().position(|s| s.day() == current.day()));
                         } else if let Some(up_to) = s.is_day_available(current.day()) {
                             s.expand(current.day(), up_to)
@@ -291,6 +345,63 @@ impl<B: Backend> Widget<B> for ChallengeList {
                     Ok(UIAction::Nothing)
                 },
                 "Expand or collapse challenge",
+            )
+            .add_binding(
+                's',
+                |s| {
+                    let s: &mut Self = s.downcast_mut().unwrap();
+
+                    let selected = s.current_selection().map(|selection| match selection {
+                        ListSelection::Day(d) => {
+                            if s.available_selections.contains(&ListSelection::Part(d, 2)) {
+                                vec![ListSelection::Part(d, 1), ListSelection::Part(d, 2)]
+                            } else {
+                                vec![ListSelection::Part(d, 1)]
+                            }
+                        }
+                        ListSelection::Part(_, _) => vec![selection],
+                    });
+
+                    if let Some(selected) = selected {
+                        for selected in selected {
+                            if s.selected_challenges.contains(&selected) {
+                                s.selected_challenges.remove(&selected);
+                            } else {
+                                s.selected_challenges.insert(selected);
+                            }
+                        }
+                    }
+                    Ok(UIAction::Nothing)
+                },
+                "Toggle selecting the currently highlighted challenge",
+            )
+            .add_binding(
+                'u',
+                |s| {
+                    let s: &mut Self = s.downcast_mut().unwrap();
+                    s.selected_challenges.clear();
+                    Ok(UIAction::Nothing)
+                },
+                "De-select all challenges",
+            )
+            .add_binding(
+                'a',
+                |s| {
+                    let s: &mut Self = s.downcast_mut().unwrap();
+                    s.selected_challenges = s.available_selections.iter().copied().collect();
+                    Ok(UIAction::Nothing)
+                },
+                "Select all challenges",
+            )
+            .add_binding(
+                'r',
+                |s| {
+                    let s: &mut Self = s.downcast_mut().unwrap();
+                    let selection = s.selected_challenges.drain().collect();
+                    s.statuses.clear();
+                    Ok(UIAction::RunChallenges(selection))
+                },
+                "Run selected challenges",
             )
     }
 
@@ -329,9 +440,5 @@ impl<B: Backend> Widget<B> for ChallengeList {
                 .and_modify(|s| *s = kind_from_status(status))
                 .or_insert_with(|| kind_from_status(status));
         }
-    }
-
-    fn on_run_all(&mut self) {
-        self.statuses = HashMap::new();
     }
 }

@@ -68,7 +68,6 @@ trait Widget<B> {
             },
         )
     }
-    fn on_run_all(&mut self) {}
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default, Hash)]
@@ -79,9 +78,10 @@ enum WidgetKind {
     ChallengeOutput,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum UIAction {
     Nothing,
+    RunChallenges(Vec<ListSelection>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -89,13 +89,12 @@ enum State {
     #[default]
     Normal,
     ShowHelp,
-    ShowWidgetHelp(WidgetKind),
 }
 
 pub struct UI<B> {
     aoc: AdventOfCode,
     widgets: Vec<Box<dyn Widget<B>>>,
-    selected_widget: WidgetKind,
+    selected_widget: Option<WidgetKind>,
     pool: Pool,
     runner_status: RunnersStatus,
     should_quit: bool,
@@ -107,7 +106,7 @@ impl<B: Backend> UI<B> {
         let list = list::ChallengeList::new(&aoc);
         Self {
             aoc,
-            selected_widget: WidgetKind::default(),
+            selected_widget: None,
             widgets: vec![
                 Box::new(list),
                 Box::new(input::DatasetInput::default()),
@@ -121,15 +120,20 @@ impl<B: Backend> UI<B> {
     }
 
     fn select_widget(&mut self, which: WidgetKind) {
-        self.selected_widget = which;
+        self.selected_widget = Some(which);
     }
 
     fn keymap<'a>() -> Keymap<'a, Self, Result<UIAction>> {
         Keymap::<Self, Result<UIAction>>::default()
+            .with_name("Global mode")
             .add_binding(
                 'q',
                 |u| {
-                    u.should_quit = true;
+                    if u.selected_widget.is_some() {
+                        u.selected_widget = None;
+                    } else {
+                        u.should_quit = true;
+                    }
                     Ok(UIAction::Nothing)
                 },
                 "Quit the program",
@@ -158,39 +162,6 @@ impl<B: Backend> UI<B> {
                     Ok(UIAction::Nothing)
                 },
                 "Navigate to the output widget",
-            )
-            .add_binding(
-                'a',
-                |u| {
-                    u.run_all()?;
-                    Ok(UIAction::Nothing)
-                },
-                "Run all challenges",
-            )
-            .add_binding(
-                KeyCode::Right,
-                |u| {
-                    u.selected_widget = match u.selected_widget {
-                        WidgetKind::ChallengeList | WidgetKind::DatasetInput => {
-                            WidgetKind::DatasetInput
-                        }
-                        WidgetKind::ChallengeOutput => WidgetKind::ChallengeOutput,
-                    };
-                    Ok(UIAction::Nothing)
-                },
-                "Navigate to the widget to the right",
-            )
-            .add_binding(
-                KeyCode::Left,
-                |u| {
-                    u.selected_widget = match u.selected_widget {
-                        WidgetKind::ChallengeList
-                        | WidgetKind::DatasetInput
-                        | WidgetKind::ChallengeOutput => WidgetKind::ChallengeList,
-                    };
-                    Ok(UIAction::Nothing)
-                },
-                "Navigate to the widget to the left",
             )
             .add_binding(
                 'h',
@@ -228,14 +199,17 @@ impl<B: Backend> UI<B> {
             let layout = self.layout(f.size());
 
             for w in self.widgets.iter_mut() {
-                let selected = w.kind() == self.selected_widget;
+                let selected = self.selected_widget.map(|k| k == w.kind()).unwrap_or(false);
                 w.draw(f, *layout.get(&w.kind()).unwrap(), &self.aoc, selected);
             }
 
             match self.state {
                 State::Normal => {}
-                State::ShowHelp => Self::keymap().popup().draw(f, f.size()),
-                State::ShowWidgetHelp(_) => todo!(),
+                State::ShowHelp => self
+                    .get_selected_widget()
+                    .map(|w| w.keymap().popup())
+                    .unwrap_or_else(|| Self::keymap().popup())
+                    .draw(f, f.size()),
             }
         })?;
 
@@ -262,7 +236,7 @@ impl<B: Backend> UI<B> {
     fn get_selected_widget(&mut self) -> Option<&mut Box<dyn Widget<B>>> {
         self.widgets
             .iter_mut()
-            .find(|w| w.kind() == self.selected_widget)
+            .find(|w| self.selected_widget.map(|k| k == w.kind()).unwrap_or(false))
     }
 
     fn handle_input(&mut self) -> Result<()> {
@@ -278,6 +252,11 @@ impl<B: Backend> UI<B> {
                     {
                         match res? {
                             UIAction::Nothing => {}
+                            UIAction::RunChallenges(selections) => {
+                                for s in selections {
+                                    self.run_challenge(s)?;
+                                }
+                            }
                         }
                     }
                 }
@@ -296,12 +275,19 @@ impl<B: Backend> UI<B> {
         }
     }
 
+    fn run_challenge(&mut self, selection: ListSelection) -> Result<()> {
+        for selection in Vec::<Selection>::from(selection) {
+            self.runner_status.retain(|s| s.selection != selection);
+            if let Some(task) = self.aoc.task_for(selection) {
+                self.pool.send_task(task)?
+            };
+        }
+
+        Ok(())
+    }
+
     fn run_all(&mut self) -> Result<()> {
         if self.pool.is_finished() {
-            for w in self.widgets.iter_mut() {
-                w.on_run_all();
-            }
-
             self.runner_status.clear();
 
             for task in self

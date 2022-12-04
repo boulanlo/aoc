@@ -116,6 +116,7 @@ impl<'a, T: ?Sized, R> Command<'a, T, R> {
 }
 
 pub struct Keymap<'a, T: ?Sized, R> {
+    name: String,
     bindings: HashMap<BindKey, Command<'a, T, R>>,
     aliases: HashMap<BindKey, BindKey>,
 }
@@ -129,9 +130,18 @@ impl<'a, T: ?Sized, R> Default for Keymap<'a, T, R> {
 impl<'a, T: ?Sized, R> Keymap<'a, T, R> {
     pub fn new() -> Self {
         Self {
+            name: String::new(),
             bindings: HashMap::new(),
             aliases: HashMap::new(),
         }
+    }
+
+    pub fn with_name<N>(mut self, name: N) -> Self
+    where
+        N: Into<String>,
+    {
+        self.name = name.into();
+        self
     }
 
     pub fn add_binding<F, B, H>(mut self, c: B, function: F, help: H) -> Self
@@ -193,6 +203,6 @@ impl<'a, T: ?Sized, R> Keymap<'a, T, R> {
     }
 
     pub fn popup(&self) -> HelpPopup {
-        HelpPopup::with_bindings(self.bindings())
+        HelpPopup::with_bindings(self.bindings(), self.name.clone())
     }
 }

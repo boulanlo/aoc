@@ -58,12 +58,19 @@ impl<'a> From<Binding> for Spans<'a> {
 
 #[derive(Default)]
 pub struct HelpPopup {
+    name: String,
     bindings: Vec<Binding>,
 }
 
 impl HelpPopup {
-    pub fn with_bindings(bindings: Vec<Binding>) -> Self {
-        Self { bindings }
+    pub fn with_bindings<N>(bindings: Vec<Binding>, name: N) -> Self
+    where
+        N: Into<String>,
+    {
+        Self {
+            bindings,
+            name: name.into(),
+        }
     }
 }
 
@@ -73,6 +80,6 @@ impl Popup for HelpPopup {
     }
 
     fn title(&self) -> String {
-        String::from(" Help ")
+        format!(" Help: {} ", self.name)
     }
 }

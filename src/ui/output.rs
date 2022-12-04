@@ -32,7 +32,7 @@ pub struct ChallengeOutput {
 
 impl ChallengeOutput {
     fn paragraph(&self) -> Vec<Spans> {
-        fn parse_status((idx, status): (usize, &Status)) -> Spans {
+        fn parse_status(status: &Status) -> Spans {
             let style_pending = Style::default().fg(Color::Yellow);
             let style_success = Style::default().fg(Color::Green);
             let style_error = Style::default()
@@ -40,14 +40,17 @@ impl ChallengeOutput {
                 .add_modifier(Modifier::RAPID_BLINK);
 
             match &status.result {
-                None => Spans::from(Span::styled(format!("Part {}:", idx + 1), style_pending)),
+                None => Spans::from(Span::styled(
+                    format!("Part {}:", status.selection.part),
+                    style_pending,
+                )),
                 Some(Ok(result)) => Spans::from(vec![
-                    Span::styled(format!("Part {}: ", idx + 1), style_success),
+                    Span::styled(format!("Part {}: ", status.selection.part), style_success),
                     Span::raw(result),
                 ]),
 
                 Some(Err(e)) => Spans::from(vec![
-                    Span::styled(format!("Part {}: ", idx + 1), style_error),
+                    Span::styled(format!("Part {}: ", status.selection.part), style_error),
                     Span::raw(e),
                 ]),
             }
@@ -57,7 +60,7 @@ impl ChallengeOutput {
             None => Vec::new(),
             Some(status) => match status {
                 ChallengeStatus::Day(statuses) => match self.selected_tab {
-                    0 => statuses.iter().enumerate().map(parse_status).collect(),
+                    0 => statuses.iter().map(parse_status).collect(),
                     1 => statuses
                         .iter()
                         .flat_map(|s| s.stdout.iter().map(|l| Spans::from(Span::raw(l))))
@@ -69,7 +72,7 @@ impl ChallengeOutput {
                     _ => unreachable!(),
                 },
                 ChallengeStatus::Part(status) => match self.selected_tab {
-                    0 => vec![parse_status((status.selection.part - 1, status))],
+                    0 => vec![parse_status(status)],
                     1 => status
                         .stdout
                         .iter()
@@ -105,13 +108,25 @@ impl<B: Backend> Widget<B> for ChallengeOutput {
         .block(
             Block::default()
                 .borders(Borders::LEFT | Borders::TOP | Borders::RIGHT)
+                .border_style(if selected {
+                    Style::default().fg(Color::Cyan)
+                } else {
+                    Style::default()
+                })
                 .title(<Self as Widget<B>>::title(self, aoc, selected)),
         )
         .highlight_style(Style::default().fg(Color::Cyan))
         .select(self.selected_tab);
 
-        let paragraph = Paragraph::new(self.paragraph())
-            .block(Block::default().borders(Borders::LEFT | Borders::BOTTOM | Borders::RIGHT));
+        let paragraph = Paragraph::new(self.paragraph()).block(
+            Block::default()
+                .borders(Borders::LEFT | Borders::BOTTOM | Borders::RIGHT)
+                .border_style(if selected {
+                    Style::default().fg(Color::Cyan)
+                } else {
+                    Style::default()
+                }),
+        );
 
         f.render_widget(tabs, areas[0]);
         f.render_widget(paragraph, areas[1]);
@@ -159,6 +174,7 @@ impl<B: Backend> Widget<B> for ChallengeOutput {
 
     fn keymap(&self) -> Keymap<'static, dyn Any, Result<UIAction>> {
         Keymap::<dyn Any, _>::default()
+            .with_name("Challenge output")
             .add_binding(
                 KeyCode::Tab,
                 |s| {
@@ -168,6 +184,7 @@ impl<B: Backend> Widget<B> for ChallengeOutput {
                 },
                 "Go to the next output tab",
             )
+            .copy_bindings(KeyCode::Tab, KeyCode::Right)
             .add_binding(
                 KeyCode::BackTab,
                 |s| {
@@ -181,5 +198,6 @@ impl<B: Backend> Widget<B> for ChallengeOutput {
                 },
                 "Go to the previous output tab",
             )
+            .copy_bindings(KeyCode::BackTab, KeyCode::Left)
     }
 }

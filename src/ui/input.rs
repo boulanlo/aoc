@@ -194,13 +194,26 @@ impl<B: Backend> Widget<B> for DatasetInput {
             .block(
                 Block::default()
                     .borders(Borders::LEFT | Borders::TOP | Borders::RIGHT)
+                    .border_style(if selected {
+                        Style::default().fg(Color::Cyan)
+                    } else {
+                        Style::default()
+                    })
                     .title(<Self as Widget<B>>::title(self, aoc, selected)),
             )
             .highlight_style(Style::default().fg(Color::Cyan))
             .select(self.selected_data);
 
         let list = List::new(self.contents())
-            .block(Block::default().borders(Borders::LEFT | Borders::BOTTOM | Borders::RIGHT))
+            .block(
+                Block::default()
+                    .borders(Borders::LEFT | Borders::BOTTOM | Borders::RIGHT)
+                    .border_style(if selected {
+                        Style::default().fg(Color::Cyan)
+                    } else {
+                        Style::default()
+                    }),
+            )
             .highlight_symbol("> ");
 
         let mut state = self.list_scroll.clone();
@@ -230,6 +243,7 @@ impl<B: Backend> Widget<B> for DatasetInput {
             .unwrap_or((0, 0, 0));
 
         Keymap::<dyn Any, _>::default()
+            .with_name("Dataset input")
             .add_binding(
                 KeyCode::Up,
                 |s| {
@@ -270,6 +284,7 @@ impl<B: Backend> Widget<B> for DatasetInput {
                 },
                 "Go to the next dataset input tab",
             )
+            .copy_bindings(KeyCode::Tab, KeyCode::Right)
             .add_binding(
                 KeyCode::BackTab,
                 move |s| {
@@ -281,6 +296,7 @@ impl<B: Backend> Widget<B> for DatasetInput {
                 },
                 "Go to the previous dataset input tab",
             )
+            .copy_bindings(KeyCode::BackTab, KeyCode::Left)
     }
 
     fn update(
