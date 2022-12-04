@@ -39,7 +39,7 @@ impl Default for DatasetInput {
 
 impl DatasetInput {
     fn available_tabs(&self) -> Vec<usize> {
-        (0..5)
+        (0..6)
             .filter_map(|idx| match idx {
                 0 => Some(idx),
                 1 | 2 => self
@@ -153,7 +153,7 @@ impl DatasetInput {
                     }
                 }
                 5 => {
-                    if let Some(s) = dataset.real_results[0].as_ref() {
+                    if let Some(s) = dataset.real_results[1].as_ref() {
                         vec![ListItem::new(Span::raw(s))]
                     } else {
                         vec![]
@@ -235,13 +235,6 @@ impl<B: Backend> Widget<B> for DatasetInput {
     }
 
     fn keymap(&self) -> Keymap<'static, dyn Any, Result<UIAction>> {
-        let (before, _, after) = self
-            .available_tabs()
-            .into_iter()
-            .circular_tuple_windows()
-            .find(|(_, now, _)| *now == self.selected_data)
-            .unwrap_or((0, 0, 0));
-
         Keymap::<dyn Any, _>::default()
             .with_name("Dataset input")
             .add_binding(
@@ -277,6 +270,12 @@ impl<B: Backend> Widget<B> for DatasetInput {
                 KeyCode::Tab,
                 move |s| {
                     let s: &mut Self = s.downcast_mut().unwrap();
+                    let (_, _, after) = s
+                        .available_tabs()
+                        .into_iter()
+                        .circular_tuple_windows()
+                        .find(|(_, now, _)| *now == s.selected_data)
+                        .unwrap_or((0, 0, 0));
                     if s.current_dataset.is_some() {
                         s.selected_data = after
                     }
@@ -289,6 +288,12 @@ impl<B: Backend> Widget<B> for DatasetInput {
                 KeyCode::BackTab,
                 move |s| {
                     let s: &mut Self = s.downcast_mut().unwrap();
+                    let (before, _, _) = s
+                        .available_tabs()
+                        .into_iter()
+                        .circular_tuple_windows()
+                        .find(|(_, now, _)| *now == s.selected_data)
+                        .unwrap_or((0, 0, 0));
                     if s.current_dataset.is_some() {
                         s.selected_data = before
                     }
