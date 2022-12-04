@@ -1,7 +1,6 @@
 use color_eyre::Result as EResult;
 
 use std::{
-    collections::HashMap,
     sync::{
         mpsc::{channel, sync_channel, Receiver, Sender, TryRecvError},
         Arc,

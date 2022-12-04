@@ -72,6 +72,10 @@ impl HelpPopup {
             name: name.into(),
         }
     }
+
+    pub fn add_bindings(&mut self, bindings: Vec<Binding>) {
+        self.bindings.extend(bindings.into_iter())
+    }
 }
 
 impl Popup for HelpPopup {

@@ -1,16 +1,26 @@
 use std::{collections::HashMap, fmt};
 
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::popup::HelpPopup;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 #[repr(transparent)]
-pub struct BindKey(pub KeyCode);
+pub struct BindKey(pub (KeyCode, KeyModifiers));
 
 impl fmt::Display for BindKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.0 {
+        if self.0 .1.contains(KeyModifiers::CONTROL) {
+            write!(f, "C-")?;
+        }
+        if self.0 .1.contains(KeyModifiers::SHIFT) {
+            write!(f, "S-")?;
+        }
+        if self.0 .1.contains(KeyModifiers::META) {
+            write!(f, "M-")?;
+        }
+
+        match self.0 .0 {
             KeyCode::Backspace
             | KeyCode::Enter
             | KeyCode::Left
@@ -33,7 +43,7 @@ impl fmt::Display for BindKey {
             | KeyCode::PrintScreen
             | KeyCode::Pause
             | KeyCode::Menu
-            | KeyCode::KeypadBegin => write!(f, "{:?}", self.0),
+            | KeyCode::KeypadBegin => write!(f, "{:?}", self.0 .0),
             KeyCode::F(n) => write!(f, "F{n}"),
             KeyCode::Char(c) => write!(f, "{c}"),
             KeyCode::Media(m) => write!(f, "{m:?}"),
@@ -56,13 +66,31 @@ impl Ord for BindKey {
 
 impl From<char> for BindKey {
     fn from(c: char) -> Self {
-        BindKey(KeyCode::Char(c))
+        BindKey((KeyCode::Char(c), KeyModifiers::NONE))
     }
 }
 
 impl From<KeyCode> for BindKey {
     fn from(k: KeyCode) -> Self {
-        Self(k)
+        Self((k, KeyModifiers::NONE))
+    }
+}
+
+impl From<KeyEvent> for BindKey {
+    fn from(e: KeyEvent) -> Self {
+        Self((e.code, e.modifiers))
+    }
+}
+
+impl From<(KeyCode, KeyModifiers)> for BindKey {
+    fn from(t: (KeyCode, KeyModifiers)) -> Self {
+        Self(t)
+    }
+}
+
+impl From<(char, KeyModifiers)> for BindKey {
+    fn from((c, m): (char, KeyModifiers)) -> Self {
+        Self((KeyCode::Char(c), m))
     }
 }
 
@@ -95,6 +123,15 @@ impl Ord for Binding {
                     .map(|b| b.to_string())
                     .unwrap_or_else(String::new),
             )
+    }
+}
+
+impl From<(char, String)> for Binding {
+    fn from((c, s): (char, String)) -> Self {
+        Self {
+            keys: vec![c.into()],
+            help: s,
+        }
     }
 }
 

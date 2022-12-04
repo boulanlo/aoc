@@ -7,7 +7,9 @@ use std::{
 
 use color_eyre::Result;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -25,14 +27,16 @@ use crate::{
 };
 
 mod bindings;
+use bindings::Keymap;
 mod input;
 mod list;
 use list::{ChallengeList, ListSelection};
-
-use self::bindings::Keymap;
+mod minibuffer;
 mod output;
 mod popup;
 use popup::Popup;
+
+use self::minibuffer::{TextInput, TextInputResponse};
 
 trait Widget<B> {
     fn draw(&mut self, f: &mut Frame<B>, area: Rect, aoc: &AdventOfCode, selected: bool)
@@ -68,19 +72,25 @@ trait Widget<B> {
             },
         )
     }
+    #[allow(unused_variables)]
+    fn handle_text_input_response(&mut self, response: TextInputResponse) -> Result<UIAction> {
+        Ok(UIAction::Nothing)
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Default, Hash)]
-enum WidgetKind {
+pub enum WidgetKind {
     #[default]
     ChallengeList,
     DatasetInput,
     ChallengeOutput,
+    Minibuffer,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 enum UIAction {
     Nothing,
+    Input(TextInput),
     RunChallenges(Vec<ListSelection>),
 }
 
@@ -89,6 +99,11 @@ enum State {
     #[default]
     Normal,
     ShowHelp,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum TextInputAction {
+    List(list::TextInputAction),
 }
 
 pub struct UI<B> {
@@ -111,6 +126,7 @@ impl<B: Backend> UI<B> {
                 Box::new(list),
                 Box::new(input::DatasetInput::default()),
                 Box::new(output::ChallengeOutput::default()),
+                Box::new(minibuffer::Minibuffer::default()),
             ],
             pool: Pool::new(4),
             runner_status: RunnersStatus::default(),
@@ -121,6 +137,10 @@ impl<B: Backend> UI<B> {
 
     fn select_widget(&mut self, which: WidgetKind) {
         self.selected_widget = Some(which);
+    }
+
+    fn get_widget(&mut self, which: WidgetKind) -> &mut Box<dyn Widget<B>> {
+        self.widgets.iter_mut().find(|w| w.kind() == which).unwrap()
     }
 
     fn keymap<'a>() -> Keymap<'a, Self, Result<UIAction>> {
@@ -174,11 +194,101 @@ impl<B: Backend> UI<B> {
             .copy_bindings('h', '?')
     }
 
+    fn keymap_text_input<'a>() -> Keymap<'a, Self, Result<UIAction>> {
+        Keymap::<Self, _>::new()
+            .with_name("Input buffer")
+            .add_binding(
+                ('h', KeyModifiers::CONTROL),
+                |u| {
+                    u.state = State::ShowHelp;
+                    Ok(UIAction::Nothing)
+                },
+                "Show this help menu",
+            )
+            .add_binding(
+                KeyCode::Esc,
+                |u| {
+                    if let Some(previously_selected) = u
+                        .get_widget(WidgetKind::Minibuffer)
+                        .as_any_mut()
+                        .downcast_mut::<minibuffer::Minibuffer>()
+                        .unwrap()
+                        .clear()
+                    {
+                        u.select_widget(previously_selected);
+                    }
+                    Ok(UIAction::Nothing)
+                },
+                "Cancel text input",
+            )
+            .add_binding(
+                KeyCode::Backspace,
+                |u| {
+                    let minibuffer = u
+                        .get_widget(WidgetKind::Minibuffer)
+                        .as_any_mut()
+                        .downcast_mut::<minibuffer::Minibuffer>()
+                        .unwrap();
+                    minibuffer.backspace();
+
+                    Ok(UIAction::Nothing)
+                },
+                "Erase a character from the text input",
+            )
+            .add_binding(
+                KeyCode::Enter,
+                |u| {
+                    let minibuffer = u
+                        .get_widget(WidgetKind::Minibuffer)
+                        .as_any_mut()
+                        .downcast_mut::<minibuffer::Minibuffer>()
+                        .unwrap();
+                    let response = minibuffer.finish();
+
+                    u.select_widget(response.origin);
+                    let widget = u.get_widget(response.origin);
+                    widget.handle_text_input_response(response)
+                },
+                "Finish text input",
+            )
+            .add_binding(
+                KeyCode::Left,
+                |u| {
+                    let minibuffer = u
+                        .get_widget(WidgetKind::Minibuffer)
+                        .as_any_mut()
+                        .downcast_mut::<minibuffer::Minibuffer>()
+                        .unwrap();
+                    minibuffer.move_cursor_left();
+                    Ok(UIAction::Nothing)
+                },
+                "Move cursor left",
+            )
+            .add_binding(
+                KeyCode::Right,
+                |u| {
+                    let minibuffer = u
+                        .get_widget(WidgetKind::Minibuffer)
+                        .as_any_mut()
+                        .downcast_mut::<minibuffer::Minibuffer>()
+                        .unwrap();
+                    minibuffer.move_cursor_right();
+                    Ok(UIAction::Nothing)
+                },
+                "Move cursor right",
+            )
+    }
+
     fn layout(&self, area: Rect) -> HashMap<WidgetKind, Rect> {
+        let main_mini = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(3), Constraint::Length(1)])
+            .split(area);
+
         let left_right = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
-            .split(area);
+            .split(main_mini[0]);
 
         let right_top_bottom = Layout::default()
             .direction(Direction::Vertical)
@@ -189,6 +299,7 @@ impl<B: Backend> UI<B> {
             (WidgetKind::ChallengeList, left_right[0]),
             (WidgetKind::DatasetInput, right_top_bottom[0]),
             (WidgetKind::ChallengeOutput, right_top_bottom[1]),
+            (WidgetKind::Minibuffer, main_mini[1]),
         ]
         .into_iter()
         .collect()
@@ -205,11 +316,27 @@ impl<B: Backend> UI<B> {
 
             match self.state {
                 State::Normal => {}
-                State::ShowHelp => self
-                    .get_selected_widget()
-                    .map(|w| w.keymap().popup())
-                    .unwrap_or_else(|| Self::keymap().popup())
-                    .draw(f, f.size()),
+                State::ShowHelp => {
+                    if let Some(WidgetKind::Minibuffer) = self.selected_widget {
+                        let mut popup = Self::keymap_text_input().popup();
+                        let minibuffer = self
+                            .get_widget(WidgetKind::Minibuffer)
+                            .as_any_mut()
+                            .downcast_mut::<minibuffer::Minibuffer>()
+                            .unwrap();
+
+                        if let Some(bindings) = minibuffer.bindings() {
+                            popup.add_bindings(bindings);
+                        }
+
+                        popup.draw(f, f.size())
+                    } else {
+                        self.get_selected_widget()
+                            .map(|w| w.keymap().popup())
+                            .unwrap_or_else(|| Self::keymap().popup())
+                            .draw(f, f.size())
+                    }
+                }
             }
         })?;
 
@@ -239,25 +366,54 @@ impl<B: Backend> UI<B> {
             .find(|w| self.selected_widget.map(|k| k == w.kind()).unwrap_or(false))
     }
 
+    fn handle_action(&mut self, action: UIAction) -> Result<()> {
+        match action {
+            UIAction::Nothing => {}
+            UIAction::Input(input) => {
+                self.select_widget(WidgetKind::Minibuffer);
+                let minibuffer = self
+                    .get_widget(WidgetKind::Minibuffer)
+                    .as_any_mut()
+                    .downcast_mut::<minibuffer::Minibuffer>()
+                    .unwrap();
+                minibuffer.start(input);
+            }
+            UIAction::RunChallenges(selections) => {
+                for s in selections {
+                    self.run_challenge(s)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn handle_input(&mut self) -> Result<()> {
         while event::poll(Duration::from_secs(0))? {
             if let Event::Key(key) = event::read()? {
                 if self.state != State::Normal {
                     self.state = State::Normal
+                } else if let Some(WidgetKind::Minibuffer) = self.selected_widget {
+                    let global_input_keymap = Self::keymap_text_input();
+
+                    if let Some(res) = global_input_keymap.handle_input(self, key) {
+                        self.handle_action(res?)?
+                    } else {
+                        let minibuffer = self
+                            .get_widget(WidgetKind::Minibuffer)
+                            .as_any_mut()
+                            .downcast_mut::<minibuffer::Minibuffer>()
+                            .unwrap();
+                        if let KeyCode::Char(c) = key.code {
+                            minibuffer.push(c)
+                        }
+                    }
                 } else {
                     let keymap = Self::keymap();
                     if let Some(res) = keymap
-                        .handle_input(self, key.code)
+                        .handle_input(self, key)
                         .or_else(|| self.get_selected_widget().and_then(|w| w.handle_input(key)))
                     {
-                        match res? {
-                            UIAction::Nothing => {}
-                            UIAction::RunChallenges(selections) => {
-                                for s in selections {
-                                    self.run_challenge(s)?;
-                                }
-                            }
-                        }
+                        self.handle_action(res?)?
                     }
                 }
             }
@@ -281,28 +437,6 @@ impl<B: Backend> UI<B> {
             if let Some(task) = self.aoc.task_for(selection) {
                 self.pool.send_task(task)?
             };
-        }
-
-        Ok(())
-    }
-
-    fn run_all(&mut self) -> Result<()> {
-        if self.pool.is_finished() {
-            self.runner_status.clear();
-
-            for task in self
-                .aoc
-                .available_challenges()
-                .into_iter()
-                .flat_map(|day| {
-                    Selection::day(day)
-                        .into_iter()
-                        .map(|s| self.aoc.task_for(s))
-                })
-                .flatten()
-            {
-                self.pool.send_task(task)?;
-            }
         }
 
         Ok(())

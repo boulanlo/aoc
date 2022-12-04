@@ -20,13 +20,22 @@ use crate::{
     AdventOfCode,
 };
 
-use super::{bindings::Keymap, UIAction, Widget, WidgetKind};
+use super::{
+    bindings::Keymap,
+    minibuffer::{TextInput, TextInputResponse},
+    UIAction, Widget, WidgetKind,
+};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 enum Status {
     Finished,
     Running,
     Error,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum TextInputAction {
+    RunSelection,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -395,14 +404,32 @@ impl<B: Backend> Widget<B> for ChallengeList {
             )
             .add_binding(
                 'r',
-                |s| {
-                    let s: &mut Self = s.downcast_mut().unwrap();
-                    let selection = s.selected_challenges.drain().collect();
-                    s.statuses.clear();
-                    Ok(UIAction::RunChallenges(selection))
+                |_| {
+                    Ok(UIAction::Input(TextInput {
+                        prompt: String::from("Run the selected challenge(s): "),
+                        origin: WidgetKind::ChallengeList,
+                        action: super::TextInputAction::List(TextInputAction::RunSelection),
+                        bindings: vec![
+                            ('r', String::from("Run and output results")).into(),
+                            ('v', String::from("Run and output results, verify against example")).into(),
+                            ('a', String::from("Run and output results, verify against example and real results (if present)")).into()
+                        ],
+                    }))
                 },
                 "Run selected challenges",
             )
+    }
+
+    fn handle_text_input_response(&mut self, response: TextInputResponse) -> Result<UIAction> {
+        match response.action {
+            super::TextInputAction::List(action) => match action {
+                TextInputAction::RunSelection => {
+                    let selection = self.selected_challenges.drain().collect();
+                    self.statuses.clear();
+                    Ok(UIAction::RunChallenges(selection))
+                }
+            },
+        }
     }
 
     fn as_any(&self) -> &dyn Any {
