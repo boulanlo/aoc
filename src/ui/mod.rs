@@ -41,8 +41,11 @@ trait Widget<B> {
 
     fn kind(&self) -> WidgetKind;
     #[allow(unused_variables)]
-    fn handle_input(&mut self, input: KeyEvent) -> Result<bool> {
-        Ok(false)
+    fn handle_input(&mut self, input: KeyEvent) -> Option<Result<UIAction>> {
+        self.keymap().handle_input(self.as_any_mut(), input.code)
+    }
+    fn keymap(&self) -> Keymap<'static, dyn Any, Result<UIAction>> {
+        todo!()
     }
     #[allow(unused_variables)]
     fn update(
@@ -53,6 +56,7 @@ trait Widget<B> {
     ) {
     }
     fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
     fn name(&self, aoc: &AdventOfCode) -> String;
     fn title(&self, aoc: &AdventOfCode, selected: bool) -> Span {
         Span::styled(
@@ -268,13 +272,12 @@ impl<B: Backend> UI<B> {
                     self.state = State::Normal
                 } else {
                     let keymap = Self::keymap();
-                    if let Some(res) = keymap.handle_input(self, key.code) {
+                    if let Some(res) = keymap
+                        .handle_input(self, key.code)
+                        .or_else(|| self.get_selected_widget().and_then(|w| w.handle_input(key)))
+                    {
                         match res? {
                             UIAction::Nothing => {}
-                        }
-                    } else if let Some(widget) = self.get_selected_widget() {
-                        if widget.handle_input(key)? {
-                            self.should_quit = true;
                         }
                     }
                 }

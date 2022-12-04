@@ -1,7 +1,7 @@
 use std::any::Any;
 
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::KeyCode;
 use itertools::Itertools;
 use tui::{
     backend::Backend,
@@ -14,7 +14,7 @@ use tui::{
 
 use crate::{runner::RunnersStatus, AdventOfCode, Dataset};
 
-use super::{list::ListSelection, Widget, WidgetKind};
+use super::{bindings::Keymap, list::ListSelection, UIAction, Widget, WidgetKind};
 
 pub struct DatasetInput {
     current_day: Option<ListSelection>,
@@ -217,7 +217,11 @@ impl<B: Backend> Widget<B> for DatasetInput {
         self as _
     }
 
-    fn handle_input(&mut self, input: KeyEvent) -> Result<bool> {
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self as _
+    }
+
+    fn keymap(&self) -> Keymap<'static, dyn Any, Result<UIAction>> {
         let (before, _, after) = self
             .available_tabs()
             .into_iter()
@@ -225,42 +229,58 @@ impl<B: Backend> Widget<B> for DatasetInput {
             .find(|(_, now, _)| *now == self.selected_data)
             .unwrap_or((0, 0, 0));
 
-        match input.code {
-            KeyCode::Up => {
-                if self.current_dataset.is_some() {
-                    self.list_scroll
-                        .select(self.current_contents_len().map(|len| {
-                            self.list_scroll
+        Keymap::<dyn Any, _>::default()
+            .add_binding(
+                KeyCode::Up,
+                |s| {
+                    let s: &mut Self = s.downcast_mut().unwrap();
+                    if s.current_dataset.is_some() {
+                        s.list_scroll.select(s.current_contents_len().map(|len| {
+                            s.list_scroll
                                 .selected()
                                 .map(|x| if x == 0 { len - 1 } else { x - 1 })
                                 .unwrap_or(0)
                         }))
-                }
-            }
-            KeyCode::Down => {
-                if self.current_dataset.is_some() {
-                    self.list_scroll
-                        .select(self.current_contents_len().map(|len| {
-                            self.list_scroll
-                                .selected()
-                                .map(|x| (x + 1) % len)
-                                .unwrap_or(0)
+                    }
+                    Ok(UIAction::Nothing)
+                },
+                "Scroll up",
+            )
+            .add_binding(
+                KeyCode::Down,
+                |s| {
+                    let s: &mut Self = s.downcast_mut().unwrap();
+                    if s.current_dataset.is_some() {
+                        s.list_scroll.select(s.current_contents_len().map(|len| {
+                            s.list_scroll.selected().map(|x| (x + 1) % len).unwrap_or(0)
                         }))
-                }
-            }
-            KeyCode::Tab => {
-                if self.current_dataset.is_some() {
-                    self.selected_data = after
-                }
-            }
-            KeyCode::BackTab => {
-                if self.current_dataset.is_some() {
-                    self.selected_data = before
-                }
-            }
-            _ => {}
-        }
-        Ok(false)
+                    }
+                    Ok(UIAction::Nothing)
+                },
+                "Scroll down",
+            )
+            .add_binding(
+                KeyCode::Tab,
+                move |s| {
+                    let s: &mut Self = s.downcast_mut().unwrap();
+                    if s.current_dataset.is_some() {
+                        s.selected_data = after
+                    }
+                    Ok(UIAction::Nothing)
+                },
+                "Go to the next dataset input tab",
+            )
+            .add_binding(
+                KeyCode::BackTab,
+                move |s| {
+                    let s: &mut Self = s.downcast_mut().unwrap();
+                    if s.current_dataset.is_some() {
+                        s.selected_data = before
+                    }
+                    Ok(UIAction::Nothing)
+                },
+                "Go to the previous dataset input tab",
+            )
     }
 
     fn update(

@@ -1,7 +1,7 @@
 use std::any::Any;
 
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::KeyCode;
 use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
@@ -16,7 +16,7 @@ use crate::{
     AdventOfCode,
 };
 
-use super::{list::ListSelection, Widget, WidgetKind};
+use super::{bindings::Keymap, list::ListSelection, UIAction, Widget, WidgetKind};
 
 enum ChallengeStatus {
     Day(Vec<Status>),
@@ -125,6 +125,10 @@ impl<B: Backend> Widget<B> for ChallengeOutput {
         self as _
     }
 
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self as _
+    }
+
     fn name(&self, _aoc: &AdventOfCode) -> String {
         String::from(" Challenge results & outputs ")
     }
@@ -153,18 +157,29 @@ impl<B: Backend> Widget<B> for ChallengeOutput {
         self.selected_day = selected_day;
     }
 
-    fn handle_input(&mut self, input: KeyEvent) -> Result<bool> {
-        match input.code {
-            KeyCode::Tab => self.selected_tab = (self.selected_tab + 1) % 3,
-            KeyCode::BackTab => {
-                if self.selected_tab == 0 {
-                    self.selected_tab = 2;
-                } else {
-                    self.selected_tab -= 1;
-                }
-            }
-            _ => {}
-        }
-        Ok(false)
+    fn keymap(&self) -> Keymap<'static, dyn Any, Result<UIAction>> {
+        Keymap::<dyn Any, _>::default()
+            .add_binding(
+                KeyCode::Tab,
+                |s| {
+                    let s: &mut Self = s.downcast_mut().unwrap();
+                    s.selected_tab = (s.selected_tab + 1) % 3;
+                    Ok(UIAction::Nothing)
+                },
+                "Go to the next output tab",
+            )
+            .add_binding(
+                KeyCode::BackTab,
+                |s| {
+                    let s: &mut Self = s.downcast_mut().unwrap();
+                    if s.selected_tab == 0 {
+                        s.selected_tab = 2;
+                    } else {
+                        s.selected_tab -= 1;
+                    }
+                    Ok(UIAction::Nothing)
+                },
+                "Go to the previous output tab",
+            )
     }
 }

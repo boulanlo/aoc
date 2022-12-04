@@ -1,7 +1,7 @@
 use std::{any::Any, cmp::Ordering, collections::HashMap};
 
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::KeyCode;
 use tui::{
     backend::Backend,
     layout::Rect,
@@ -16,7 +16,7 @@ use crate::{
     AdventOfCode,
 };
 
-use super::{Widget, WidgetKind};
+use super::{bindings::Keymap, UIAction, Widget, WidgetKind};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 enum Status {
@@ -237,49 +237,68 @@ impl<B: Backend> Widget<B> for ChallengeList {
         WidgetKind::ChallengeList
     }
 
-    fn handle_input(&mut self, input: KeyEvent) -> Result<bool> {
-        match input.code {
-            KeyCode::Down => self.selected.select(Some(
-                self.selected
-                    .selected()
-                    .map(|x| (x + 1) % self.selections.len())
-                    .unwrap_or(0),
-            )),
-            KeyCode::Up => self.selected.select(Some(
-                self.selected
-                    .selected()
-                    .map(|x| {
-                        if x == 0 {
-                            self.selections.len() - 1
-                        } else {
-                            x - 1
+    fn keymap(&self) -> Keymap<'static, dyn Any, Result<UIAction>> {
+        Keymap::<dyn Any, _>::default()
+            .add_binding(
+                KeyCode::Down,
+                |s| {
+                    let s: &mut Self = s.downcast_mut().unwrap();
+                    s.selected.select(Some(
+                        s.selected
+                            .selected()
+                            .map(|x| (x + 1) % s.selections.len())
+                            .unwrap_or(0),
+                    ));
+                    Ok(UIAction::Nothing)
+                },
+                "Scroll down",
+            )
+            .add_binding(
+                KeyCode::Up,
+                |s| {
+                    let s: &mut Self = s.downcast_mut().unwrap();
+                    s.selected.select(Some(
+                        s.selected
+                            .selected()
+                            .map(|x| {
+                                if x == 0 {
+                                    s.selections.len() - 1
+                                } else {
+                                    x - 1
+                                }
+                            })
+                            .unwrap_or(s.selections.len() - 1),
+                    ));
+                    Ok(UIAction::Nothing)
+                },
+                "Scroll up",
+            )
+            .add_binding(
+                ' ',
+                |s| {
+                    let s: &mut Self = s.downcast_mut().unwrap();
+                    if let Some(selected) = s.selected.selected() {
+                        let current = s.selections[selected];
+
+                        if s.is_expanded(current.day()) {
+                            s.collapse(current.day());
+                            s.selected
+                                .select(s.selections.iter().position(|s| s.day() == current.day()));
+                        } else if let Some(up_to) = s.is_day_available(current.day()) {
+                            s.expand(current.day(), up_to)
                         }
-                    })
-                    .unwrap_or(self.selections.len() - 1),
-            )),
-            KeyCode::Char(' ') => {
-                if let Some(selected) = self.selected.selected() {
-                    let current = self.selections[selected];
-
-                    if self.is_expanded(current.day()) {
-                        self.collapse(current.day());
-                        self.selected.select(
-                            self.selections
-                                .iter()
-                                .position(|s| s.day() == current.day()),
-                        );
-                    } else if let Some(up_to) = self.is_day_available(current.day()) {
-                        self.expand(current.day(), up_to)
                     }
-                }
-            }
-            _ => {}
-        }
-
-        Ok(false)
+                    Ok(UIAction::Nothing)
+                },
+                "Expand or collapse challenge",
+            )
     }
 
     fn as_any(&self) -> &dyn Any {
+        self as _
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
         self as _
     }
 

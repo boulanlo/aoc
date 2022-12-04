@@ -104,29 +104,29 @@ impl Binding {
     }
 }
 
-pub struct Command<'a, T, R> {
+pub struct Command<'a, T: ?Sized, R> {
     function: Box<dyn Fn(&mut T) -> R + 'a>,
     help: String,
 }
 
-impl<'a, T, R> Command<'a, T, R> {
+impl<'a, T: ?Sized, R> Command<'a, T, R> {
     pub fn get_command(&self) -> &dyn Fn(&mut T) -> R {
         &self.function
     }
 }
 
-pub struct Keymap<'a, T, R> {
+pub struct Keymap<'a, T: ?Sized, R> {
     bindings: HashMap<BindKey, Command<'a, T, R>>,
     aliases: HashMap<BindKey, BindKey>,
 }
 
-impl<'a, T, R> Default for Keymap<'a, T, R> {
+impl<'a, T: ?Sized, R> Default for Keymap<'a, T, R> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<'a, T, R> Keymap<'a, T, R> {
+impl<'a, T: ?Sized, R> Keymap<'a, T, R> {
     pub fn new() -> Self {
         Self {
             bindings: HashMap::new(),
