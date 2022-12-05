@@ -470,6 +470,8 @@ impl UI<CrosstermBackend<Stdout>> {
                 self.handle_input()?;
                 self.update();
                 self.draw(&mut terminal)?;
+
+                std::thread::sleep(framerate)
             }
         }
 
