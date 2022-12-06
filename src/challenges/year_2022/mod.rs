@@ -13,6 +13,7 @@ mod day2;
 mod day3;
 mod day4;
 mod day5;
+mod day6;
 
 impl Year for Year2022 {
     fn challenges(
@@ -34,7 +35,9 @@ impl Year for Year2022 {
             Some(Arc::new(day5::Day5::new(
                 data_config.get_dataset("2022", "5")?,
             ))),
-            None,
+            Some(Arc::new(day6::Day6::new(
+                data_config.get_dataset("2022", "6")?,
+            ))),
             None,
             None,
             None,
