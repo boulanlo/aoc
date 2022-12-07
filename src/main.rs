@@ -8,6 +8,10 @@ struct Args {
     /// Specific action to take
     #[command(subcommand)]
     command: Option<Command>,
+    /// Download the available data for the given token
+    #[arg(long, value_name = "AOC_TOKEN")]
+    download_data: Option<String>,
+    data_dir: Option<String>,
 }
 
 #[derive(Debug, Subcommand)]
