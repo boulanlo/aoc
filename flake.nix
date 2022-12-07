@@ -14,13 +14,27 @@
         };
       in
       {
-        defaultApp = utils.lib.mkApp {
-          drv = self.defaultPackage."${system}";
+        devShells = utils.lib.flattenTree {
+          default = with pkgs; mkShell {
+            buildInputs = [ rust-bin.stable.latest.default rust-analyzer ];
+            RUST_SRC_PATH = rustPlatform.rustLibSrc;
+          };
         };
 
-        devShell = with pkgs; mkShell {
-          buildInputs = [ rust-bin.nightly.latest.default rust-analyzer ];
-          RUST_SRC_PATH = rustPlatform.rustLibSrc;
+        packages = utils.lib.flattenTree rec {
+          aoc = pkgs.rustPlatform.buildRustPackage {
+            pname = "aoc";
+            version = "0.1.0";
+            src = ./.;
+
+            cargoLock = {
+              lockFile = ./Cargo.lock;
+            };
+
+            nativeBuildInputs = with pkgs; [ pkg-config rust-bin.stable.latest.minimal ];
+          };
+
+          default = aoc;
         };
         
       });
