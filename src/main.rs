@@ -1,8 +1,27 @@
 use aoc::{AdventOfCode, DataConfiguration, Year2022};
+use clap::{Parser, Subcommand};
 use color_eyre::Result;
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Specific action to take
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    Run {
+        year: u32,
+        day: u8,
+        part: Option<u8>,
+    },
+}
 
 fn main() -> Result<()> {
     setup()?;
+    let args = Args::parse();
 
     let data_config = DataConfiguration::new("./data")?;
     let aoc = AdventOfCode::of_year::<Year2022>(data_config)?.with_ui();
