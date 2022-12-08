@@ -133,11 +133,9 @@ impl DataConfiguration {
                         Ok(file)
                     })
                     .and_then(|file| {
-                        let r = BufReader::new(file)
+                        BufReader::new(file)
                             .lines()
-                            .collect::<Result<Vec<String>, _>>();
-                        eprintln!("{r:?}");
-                        r
+                            .collect::<Result<Vec<String>, _>>()
                     })
             }
             .map_err(|e| {
