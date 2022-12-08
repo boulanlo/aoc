@@ -1,6 +1,7 @@
 use std::ops::Index;
 
 use color_eyre::Result;
+use itertools::{FoldWhile, Itertools};
 
 use crate::{runner::Messenger, Challenge, Dataset};
 
@@ -40,20 +41,39 @@ impl Canopy {
         let tree = self[(x, y)];
         let calculation = move |acc: usize, t| {
             if t < tree {
-                Ok(acc + 1)
+                FoldWhile::Continue(acc + 1)
             } else {
-                Err(acc + 1)
+                FoldWhile::Done(acc + 1)
             }
         };
-        let discard_result = |r: Result<usize, usize>| match r {
-            Ok(v) => v,
-            Err(v) => v,
-        };
 
-        discard_result(self.line(y).take(x).rev().try_fold(0, calculation))
-            * discard_result(self.line(y).skip(x + 1).try_fold(0, calculation))
-            * discard_result(self.column(x).take(y).rev().try_fold(0, calculation))
-            * discard_result(self.column(x).skip(y + 1).try_fold(0, calculation))
+        let left = self
+            .line(y)
+            .take(x)
+            .rev()
+            .fold_while(0, calculation)
+            .into_inner();
+
+        let right = self
+            .line(y)
+            .skip(x + 1)
+            .fold_while(0, calculation)
+            .into_inner();
+
+        let top = self
+            .column(x)
+            .take(y)
+            .rev()
+            .fold_while(0, calculation)
+            .into_inner();
+
+        let bottom = self
+            .column(x)
+            .skip(y + 1)
+            .fold_while(0, calculation)
+            .into_inner();
+
+        top * bottom * left * right
     }
 
     fn line(&self, y: usize) -> impl DoubleEndedIterator<Item = u8> + ExactSizeIterator + '_ {
