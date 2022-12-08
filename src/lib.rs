@@ -1,10 +1,11 @@
 use color_eyre::Result as EResult;
-use runner::{Messenger, Selection, Task};
+use runner::{Selection, Task};
 use tui::backend::Backend;
 
 use std::{
-    fs::File,
-    io::{BufRead, BufReader},
+    collections::HashMap,
+    fs::{File, OpenOptions},
+    io::{BufRead, BufReader, Seek, Write},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -17,6 +18,7 @@ mod ui;
 use ui::UI;
 
 mod runner;
+pub use runner::{messenger, Messenger, MessengerReceiver};
 
 pub trait Challenge {
     fn name(&self) -> &'static str;
@@ -81,6 +83,7 @@ pub trait Challenge {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct DataConfiguration {
     root_dir: PathBuf,
 }
@@ -109,18 +112,40 @@ impl DataConfiguration {
         U: AsRef<str>,
     {
         fn read_file<P: AsRef<Path> + Clone>(path: P) -> EResult<Vec<String>> {
-            File::open(path.clone())
-                .and_then(|file| {
+            let path = path.as_ref();
+            if path.exists() {
+                File::open(path).and_then(|file| {
                     BufReader::new(file)
                         .lines()
                         .collect::<Result<Vec<String>, _>>()
                 })
-                .map_err(|e| {
-                    color_eyre::Report::new(e).wrap_err(format!(
-                        "Could not load dataset file {}",
-                        path.as_ref().to_string_lossy()
-                    ))
-                })
+            } else {
+                std::fs::create_dir_all(path.parent().unwrap())?;
+                OpenOptions::new()
+                    .read(true)
+                    .write(true)
+                    .create(true)
+                    .open(path)
+                    .and_then(|mut file| {
+                        file.write_all(b"TODO: fill this file!")?;
+                        file.flush()?;
+                        file.seek(std::io::SeekFrom::Start(0))?;
+                        Ok(file)
+                    })
+                    .and_then(|file| {
+                        let r = BufReader::new(file)
+                            .lines()
+                            .collect::<Result<Vec<String>, _>>();
+                        eprintln!("{r:?}");
+                        r
+                    })
+            }
+            .map_err(|e| {
+                color_eyre::Report::new(e).wrap_err(format!(
+                    "Could not load dataset file {}",
+                    path.to_string_lossy()
+                ))
+            })
         }
 
         fn read_file_optional<P: AsRef<Path> + Clone>(path: P) -> EResult<Option<Vec<String>>> {
@@ -142,11 +167,11 @@ impl DataConfiguration {
                 p
             })?,
             example_results: [
-                read_file_optional({
+                Some(read_file({
                     let mut p = day_directory.clone();
                     p.push("example_expected_1.txt");
                     p
-                })?
+                })?)
                 .map(|mut f| f.pop().unwrap()),
                 read_file_optional({
                     let mut p = day_directory.clone();
@@ -155,11 +180,11 @@ impl DataConfiguration {
                 })?
                 .map(|mut f| f.pop().unwrap()),
             ],
-            real_data: read_file_optional({
+            real_data: Some(read_file({
                 let mut p = day_directory.clone();
                 p.push("real_data.txt");
                 p
-            })?,
+            })?),
             real_results: [
                 read_file_optional({
                     let mut p = day_directory.clone();
@@ -192,6 +217,30 @@ pub struct AdventOfCode {
 }
 
 impl AdventOfCode {
+    pub fn all(data_config: DataConfiguration) -> EResult<HashMap<String, Self>> {
+        Ok([
+            (
+                String::from("2021"),
+                Self::of_year::<challenges::year_2021::Year2021>(data_config.clone())?,
+            ),
+            (
+                String::from("2022"),
+                Self::of_year::<challenges::year_2022::Year2022>(data_config)?,
+            ),
+        ]
+        .into_iter()
+        .collect())
+    }
+
+    pub fn of_year_string<S>(data_config: DataConfiguration, year: S) -> EResult<Self>
+    where
+        S: AsRef<str>,
+    {
+        Self::all(data_config)?
+            .remove(year.as_ref())
+            .ok_or_else(|| color_eyre::eyre::eyre!("Unsupported AoC year: {}", year.as_ref()))
+    }
+
     pub fn of_year<Y>(data_config: DataConfiguration) -> EResult<Self>
     where
         Y: Year,
@@ -212,6 +261,10 @@ impl AdventOfCode {
             .enumerate()
             .filter_map(|(i, c)| c.as_ref().map(|_| i + 1))
             .collect()
+    }
+
+    pub fn challenge(&self, day: usize) -> Option<Arc<dyn Challenge + Send + Sync>> {
+        self.challenges[day - 1].clone()
     }
 
     pub fn task_for(&self, selection: Selection) -> Option<Task> {

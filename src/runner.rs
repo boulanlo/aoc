@@ -90,7 +90,7 @@ impl MessengerReceiver {
     }
 }
 
-fn messenger() -> (Messenger, MessengerReceiver) {
+pub fn messenger() -> (Messenger, MessengerReceiver) {
     let (stdout_tx, stdout_rx) = channel();
     let (stderr_tx, stderr_rx) = channel();
 

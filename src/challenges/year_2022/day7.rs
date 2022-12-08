@@ -1,7 +1,4 @@
-use std::io::Write;
-
 use color_eyre::Result;
-use itertools::Itertools;
 
 use crate::{runner::Messenger, Challenge, Dataset};
 
