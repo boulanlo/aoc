@@ -106,7 +106,7 @@ impl DataConfiguration {
         }
     }
 
-    pub fn get_dataset<T, U>(&self, year: T, day: U) -> EResult<Dataset>
+    pub fn get_dataset<T, U>(&self, year: T, day: U, multiline_result: bool) -> EResult<Dataset>
     where
         T: AsRef<str>,
         U: AsRef<str>,
@@ -170,7 +170,13 @@ impl DataConfiguration {
                     p.push("example_expected_1.txt");
                     p
                 })?)
-                .map(|mut f| f.pop().unwrap()),
+                .map(|mut f| {
+                    if multiline_result {
+                        f.join("\n")
+                    } else {
+                        f.pop().unwrap()
+                    }
+                }),
                 read_file_optional({
                     let mut p = day_directory.clone();
                     p.push("example_expected_2.txt");
@@ -189,13 +195,25 @@ impl DataConfiguration {
                     p.push("real_results_1.txt");
                     p
                 })?
-                .map(|mut v| v.pop().unwrap()),
+                .map(|mut v| {
+                    if multiline_result {
+                        v.join("\n")
+                    } else {
+                        v.pop().unwrap()
+                    }
+                }),
                 read_file_optional({
                     let mut p = day_directory.clone();
                     p.push("real_results_2.txt");
                     p
                 })?
-                .map(|mut v| v.pop().unwrap()),
+                .map(|mut v| {
+                    if multiline_result {
+                        v.join("\n")
+                    } else {
+                        v.pop().unwrap()
+                    }
+                }),
             ],
         })
     }
@@ -203,10 +221,10 @@ impl DataConfiguration {
 
 #[derive(Debug, Clone)]
 pub struct Dataset {
-    pub(crate) example_data: Vec<String>,
-    pub(crate) example_results: [Option<String>; 2],
-    pub(crate) real_data: Option<Vec<String>>,
-    pub(crate) real_results: [Option<String>; 2],
+    pub example_data: Vec<String>,
+    pub example_results: [Option<String>; 2],
+    pub real_data: Option<Vec<String>>,
+    pub real_results: [Option<String>; 2],
 }
 
 pub struct AdventOfCode {

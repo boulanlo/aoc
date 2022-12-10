@@ -27,6 +27,9 @@ enum Command {
         /// The specific part to run
         #[arg(short, long)]
         part: Option<u8>,
+        /// Verify results against dataset expected results
+        #[arg(short, long)]
+        verify: bool,
     },
 }
 
@@ -39,22 +42,40 @@ fn display_challenge_results(part: u8, result: String, rx: &mut MessengerReceive
     for line in rx.receive_stderr()? {
         println!("{line}");
     }
-    println!("\nResult: {result}\n");
+    println!("\nResult:\n{result}\n");
 
     Ok(())
 }
 
-fn run_challenge(challenge: Arc<dyn Challenge + Send + Sync>, part: Option<u8>) -> Result<()> {
+fn run_challenge(
+    challenge: Arc<dyn Challenge + Send + Sync>,
+    part: Option<u8>,
+    verify: bool,
+) -> Result<()> {
     let (mut messenger, mut messenger_rx) = messenger();
 
     if let Some(part) = part {
         match part {
             1 => {
-                let result = challenge.part_1_verified(&mut messenger)?;
+                let result = if verify {
+                    challenge.part_1_verified(&mut messenger)?
+                } else {
+                    challenge.part_1(
+                        challenge.dataset().real_data.as_ref().unwrap(),
+                        &mut messenger,
+                    )?
+                };
                 display_challenge_results(1, result, &mut messenger_rx)?;
             }
             2 => {
-                let result = challenge.part_2_verified(&mut messenger)?;
+                let result = if verify {
+                    challenge.part_2_verified(&mut messenger)?
+                } else {
+                    challenge.part_2(
+                        challenge.dataset().real_data.as_ref().unwrap(),
+                        &mut messenger,
+                    )?
+                };
                 display_challenge_results(2, result, &mut messenger_rx)?;
             }
             _ => {
@@ -64,10 +85,24 @@ fn run_challenge(challenge: Arc<dyn Challenge + Send + Sync>, part: Option<u8>) 
             }
         }
     } else {
-        let result = challenge.part_1_verified(&mut messenger)?;
+        let result = if verify {
+            challenge.part_1_verified(&mut messenger)?
+        } else {
+            challenge.part_1(
+                challenge.dataset().real_data.as_ref().unwrap(),
+                &mut messenger,
+            )?
+        };
         display_challenge_results(1, result, &mut messenger_rx)?;
 
-        let result = challenge.part_2_verified(&mut messenger)?;
+        let result = if verify {
+            challenge.part_2_verified(&mut messenger)?
+        } else {
+            challenge.part_2(
+                challenge.dataset().real_data.as_ref().unwrap(),
+                &mut messenger,
+            )?
+        };
         display_challenge_results(2, result, &mut messenger_rx)?;
     }
 
@@ -84,9 +119,9 @@ fn main() -> Result<()> {
 
     if let Some(command) = args.command {
         match command {
-            Command::Run { day, part } => {
+            Command::Run { day, part, verify } => {
                 if let Some(challenge) = aoc.challenge(day as usize) {
-                    run_challenge(challenge, part)?;
+                    run_challenge(challenge, part, verify)?;
                 } else {
                     return Err(color_eyre::eyre::eyre!("Day {day} not available"));
                 }

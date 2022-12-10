@@ -17,10 +17,10 @@ impl Year for Year2021 {
     ) -> Result<[Option<Arc<dyn crate::Challenge + Send + Sync>>; 25]> {
         Ok([
             Some(Arc::new(day1::Day1::new(
-                data_config.get_dataset("2021", "1")?,
+                data_config.get_dataset("2021", "1", false)?,
             ))),
             Some(Arc::new(day2::Day2::new(
-                data_config.get_dataset("2021", "2")?,
+                data_config.get_dataset("2021", "2", false)?,
             ))),
             None,
             None,
