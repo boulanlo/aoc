@@ -182,7 +182,13 @@ impl DataConfiguration {
                     p.push("example_expected_2.txt");
                     p
                 })?
-                .map(|mut f| f.pop().unwrap()),
+                .map(|mut f| {
+                    if multiline_result {
+                        f.join("\n")
+                    } else {
+                        f.pop().unwrap()
+                    }
+                }),
             ],
             real_data: Some(read_file({
                 let mut p = day_directory.clone();

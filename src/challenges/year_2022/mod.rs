@@ -10,6 +10,7 @@ pub struct Year2022;
 
 mod day1;
 mod day10;
+mod day11;
 mod day2;
 mod day3;
 mod day4;
@@ -54,7 +55,9 @@ impl Year for Year2022 {
             Some(Arc::new(day10::Day10::new(
                 data_config.get_dataset("2022", "10", true)?,
             ))),
-            None,
+            Some(Arc::new(day11::Day11::new(
+                data_config.get_dataset("2022", "11", false)?,
+            ))),
             None,
             None,
             None,

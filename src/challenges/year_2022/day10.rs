@@ -10,15 +10,6 @@ enum Instruction {
     Addx(i32),
 }
 
-impl Instruction {
-    pub fn cycles(&self) -> usize {
-        match self {
-            Instruction::Noop => 1,
-            Instruction::Addx(_) => 2,
-        }
-    }
-}
-
 impl FromStr for Instruction {
     type Err = Report;
 
