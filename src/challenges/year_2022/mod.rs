@@ -12,6 +12,7 @@ mod day1;
 mod day10;
 mod day11;
 mod day12;
+mod day13;
 mod day2;
 mod day3;
 mod day4;
@@ -62,7 +63,9 @@ impl Year for Year2022 {
             Some(Arc::new(day12::Day12::new(
                 data_config.get_dataset("2022", "12", false)?,
             ))),
-            None,
+            Some(Arc::new(day13::Day13::new(
+                data_config.get_dataset("2022", "13", false)?,
+            ))),
             None,
             None,
             None,
