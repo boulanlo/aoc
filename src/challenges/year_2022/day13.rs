@@ -16,27 +16,25 @@ impl ListElement {
     where
         I: Iterator<Item = char>,
     {
+        fn flush_accumulator(acc: &mut Vec<char>, v: &mut Vec<ListElement>) {
+            if !acc.is_empty() {
+                v.push(ListElement::Number(
+                    acc.drain(..).collect::<String>().parse().unwrap(),
+                ))
+            }
+        }
+
         let mut v = Vec::new();
         let mut number_acc = Vec::new();
 
         while let Some(c) = iter.next() {
             match c {
                 ']' => {
-                    if !number_acc.is_empty() {
-                        v.push(Self::Number(
-                            number_acc.drain(..).collect::<String>().parse().unwrap(),
-                        ))
-                    }
+                    flush_accumulator(&mut number_acc, &mut v);
                     break;
                 }
                 '[' => v.push(Self::from_chars(iter)),
-                ',' => {
-                    if !number_acc.is_empty() {
-                        v.push(Self::Number(
-                            number_acc.drain(..).collect::<String>().parse().unwrap(),
-                        ))
-                    }
-                }
+                ',' => flush_accumulator(&mut number_acc, &mut v),
                 c => number_acc.push(c),
             }
         }
