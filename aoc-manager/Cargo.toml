@@ -1,0 +1,14 @@
+[package]
+default-run = "aoc-manager"
+edition = "2021"
+name = "aoc-manager"
+version = "0.1.0"
+
+[dependencies]
+chrono = { version = "0.4.31", default-features = false, features = ["clock", "alloc", "std"] }
+clap = { version = "4.4.6", features = ["derive"] }
+colored = "2.0.4"
+notify = "6.1.1"
+thiserror = "1.0.49"
+toml = "0.8.2"
+ureq = "2.8.0"
