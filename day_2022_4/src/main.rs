@@ -1,8 +1,5 @@
 use std::ops::RangeInclusive;
 
-use aoc_utils::*;
-use itertools::Itertools;
-
 // Uncomment the line below to include your problem input
 // const INPUT: &str = include_str!("input.txt");
 

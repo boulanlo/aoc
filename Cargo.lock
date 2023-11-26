@@ -248,6 +248,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "day_2022_10"
+version = "0.1.0"
+dependencies = [
+ "aoc-utils",
+ "itertools",
+]
+
+[[package]]
+name = "day_2022_11"
+version = "0.1.0"
+dependencies = [
+ "aoc-utils",
+ "itertools",
+]
+
+[[package]]
+name = "day_2022_12"
+version = "0.1.0"
+dependencies = [
+ "aoc-utils",
+ "itertools",
+]
+
+[[package]]
 name = "day_2022_2"
 version = "0.1.0"
 dependencies = [
@@ -297,6 +321,14 @@ dependencies = [
 
 [[package]]
 name = "day_2022_8"
+version = "0.1.0"
+dependencies = [
+ "aoc-utils",
+ "itertools",
+]
+
+[[package]]
+name = "day_2022_9"
 version = "0.1.0"
 dependencies = [
  "aoc-utils",
