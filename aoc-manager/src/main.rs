@@ -122,7 +122,7 @@ impl FromStr for Day {
 
 impl fmt::Display for Day {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{:02}", self.0)
     }
 }
 

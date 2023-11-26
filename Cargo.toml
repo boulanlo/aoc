@@ -1,4 +1,19 @@
 [workspace]
 exclude = ["template"]
-members = ["aoc-manager", "aoc-utils", "day_2022_1", "day_2022_2", "day_2022_3", "day_2022_4", "day_2022_5", "day_2022_6", "day_2022_7", "day_2022_8", "day_2022_9", "day_2022_10", "day_2022_11", "day_2022_12"]
+members = [
+  "aoc-manager",
+  "aoc-utils",
+  "day_2022_01",
+  "day_2022_02",
+  "day_2022_03",
+  "day_2022_04",
+  "day_2022_05",
+  "day_2022_06",
+  "day_2022_07",
+  "day_2022_08",
+  "day_2022_09",
+  "day_2022_10",
+  "day_2022_11",
+  "day_2022_12",
+]
 resolver = "2"
