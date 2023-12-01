@@ -179,7 +179,7 @@ impl Map {
             let current_len = lookup[coord_to_idx((x, y), self.width)];
 
             // We want to replenish the list of pending paths. We are going to
-            // dd to it the available adjacent paths...
+            // add to it the available adjacent paths...
             pending.extend(self.available_paths((x, y), hiking_direction).filter_map(
                 |(path_x, path_y)| {
                     // ...but only if we can get here faster than we already have

@@ -1,0 +1,10 @@
+[dependencies]
+itertools = "0.11.0"
+
+[dependencies.aoc-utils]
+path = "../aoc-utils"
+
+[package]
+edition = "2021"
+name = "day_2023_01"
+version = "0.1.0"
