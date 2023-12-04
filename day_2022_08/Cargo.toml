@@ -6,5 +6,5 @@ path = "../aoc-utils"
 
 [package]
 edition = "2021"
-name = "day_2022_8"
+name = "day_2022_08"
 version = "0.1.0"

@@ -240,7 +240,71 @@ dependencies = [
 ]
 
 [[package]]
-name = "day_2022_1"
+name = "day_2022_01"
+version = "0.1.0"
+dependencies = [
+ "aoc-utils",
+ "itertools",
+]
+
+[[package]]
+name = "day_2022_02"
+version = "0.1.0"
+dependencies = [
+ "aoc-utils",
+ "itertools",
+]
+
+[[package]]
+name = "day_2022_03"
+version = "0.1.0"
+dependencies = [
+ "aoc-utils",
+ "itertools",
+]
+
+[[package]]
+name = "day_2022_04"
+version = "0.1.0"
+dependencies = [
+ "aoc-utils",
+ "itertools",
+]
+
+[[package]]
+name = "day_2022_05"
+version = "0.1.0"
+dependencies = [
+ "aoc-utils",
+ "itertools",
+]
+
+[[package]]
+name = "day_2022_06"
+version = "0.1.0"
+dependencies = [
+ "aoc-utils",
+ "itertools",
+]
+
+[[package]]
+name = "day_2022_07"
+version = "0.1.0"
+dependencies = [
+ "aoc-utils",
+ "itertools",
+]
+
+[[package]]
+name = "day_2022_08"
+version = "0.1.0"
+dependencies = [
+ "aoc-utils",
+ "itertools",
+]
+
+[[package]]
+name = "day_2022_09"
 version = "0.1.0"
 dependencies = [
  "aoc-utils",
@@ -265,70 +329,6 @@ dependencies = [
 
 [[package]]
 name = "day_2022_12"
-version = "0.1.0"
-dependencies = [
- "aoc-utils",
- "itertools",
-]
-
-[[package]]
-name = "day_2022_2"
-version = "0.1.0"
-dependencies = [
- "aoc-utils",
- "itertools",
-]
-
-[[package]]
-name = "day_2022_3"
-version = "0.1.0"
-dependencies = [
- "aoc-utils",
- "itertools",
-]
-
-[[package]]
-name = "day_2022_4"
-version = "0.1.0"
-dependencies = [
- "aoc-utils",
- "itertools",
-]
-
-[[package]]
-name = "day_2022_5"
-version = "0.1.0"
-dependencies = [
- "aoc-utils",
- "itertools",
-]
-
-[[package]]
-name = "day_2022_6"
-version = "0.1.0"
-dependencies = [
- "aoc-utils",
- "itertools",
-]
-
-[[package]]
-name = "day_2022_7"
-version = "0.1.0"
-dependencies = [
- "aoc-utils",
- "itertools",
-]
-
-[[package]]
-name = "day_2022_8"
-version = "0.1.0"
-dependencies = [
- "aoc-utils",
- "itertools",
-]
-
-[[package]]
-name = "day_2022_9"
 version = "0.1.0"
 dependencies = [
  "aoc-utils",
