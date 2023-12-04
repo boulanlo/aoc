@@ -66,12 +66,11 @@ fn part_2(input: &str) {
         .enumerate()
         // ...compute the number of cards we obtain:
         .fold(
-            // At first, we start with no cards, and we will collect each card
-            // once.
-            (0, input.lines().map(|_| 1).collect::<Vec<u32>>()),
+            // At first, we collect each card.
+            input.lines().map(|_| 1).collect::<Vec<u32>>(),
             // And then, for each subsequent card and the number of matching
             // numbers:
-            |(total, mut copies), (i, matching)| {
+            |mut copies, (i, matching)| {
                 // Update the number of copies of the X subsequent cards by the
                 // number of copies of this current card, where X is the count
                 // of matching numbers of the current card.
@@ -79,13 +78,13 @@ fn part_2(input: &str) {
                     copies[i + (dx as usize) + 1] += copies[i];
                 }
 
-                // And now, the total is incremented by the number of copies of
-                // this current card.
-                (total + copies[i], copies)
+                copies
             },
         )
-        // We can discard the cumulative vector.
-        .0;
+        // And finally, we sum the amount of copies of each card to
+        // get the result.
+        .into_iter()
+        .sum::<u32>();
 
     println!("Part 2: {result}");
 }
