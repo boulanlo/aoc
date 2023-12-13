@@ -2,3 +2,4 @@ target
 .aoc-token
 day_*/src/input.txt
 .input-cache
+.direnv
