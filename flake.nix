@@ -19,7 +19,7 @@
         };
 
         devShell = with pkgs; mkShell {
-          buildInputs = [ rust-bin.stable.latest.default rust-analyzer ];
+          buildInputs = [ rust-bin.stable.latest.default rust-analyzer linuxKernel.packages.linux_6_1.perf ];
           RUST_SRC_PATH = rustPlatform.rustLibSrc;
         };
         
