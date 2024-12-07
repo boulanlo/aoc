@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fmt,
     fs::ReadDir,
     path::{Path, PathBuf},
@@ -42,6 +43,8 @@ enum RuntimeError {
     YearOutsideRange(i32),
     #[error("year specified without day. specify either both, neither or just the day.")]
     YearWithoutDay,
+    #[error("\"{}\" is not a valid AoC crate name.", .0)]
+    InvalidCrateFormat(String),
 }
 
 /// Returns the current day of the challenge. This requires the current date to
@@ -96,7 +99,7 @@ where
     )
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 struct Day(u32);
 
@@ -126,7 +129,7 @@ impl fmt::Display for Day {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 struct Year(i32);
 
@@ -160,7 +163,7 @@ impl fmt::Display for Year {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct Challenge {
     day: Day,
     year: Year,
@@ -177,6 +180,35 @@ impl Challenge {
 
     fn input_name(&self) -> String {
         format!("{}_{}.txt", self.year, self.day)
+    }
+}
+
+impl FromStr for Challenge {
+    type Err = RuntimeError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut tokens = s.split('_');
+        if tokens.next() != Some("day") {
+            return Err(RuntimeError::InvalidCrateFormat(s.to_string()));
+        }
+
+        let year = tokens
+            .next()
+            .and_then(|s| s.parse::<i32>().ok())
+            .map(|v| Year(v))
+            .ok_or_else(|| RuntimeError::InvalidCrateFormat(s.to_string()))?;
+
+        let day = tokens
+            .next()
+            .and_then(|s| s.parse::<u32>().ok())
+            .map(|v| Day(v))
+            .ok_or_else(|| RuntimeError::InvalidCrateFormat(s.to_string()))?;
+
+        if tokens.next().is_some() {
+            return Err(RuntimeError::InvalidCrateFormat(s.to_string()));
+        }
+
+        Ok(Challenge { day, year })
     }
 }
 
@@ -202,7 +234,7 @@ impl Workspace {
         }
     }
 
-    fn add_day(&mut self, challenge: Challenge) -> Result<(), RuntimeError> {
+    fn members_mut(&mut self) -> &mut Vec<Value> {
         let workspace = self
             .0
             .get_mut("workspace")
@@ -210,11 +242,37 @@ impl Workspace {
             .as_table_mut()
             .expect("the `workspace` value should always be a table");
 
-        let members = workspace
+        workspace
             .get_mut("members")
             .expect("the `members` value is missing from [workspace]")
             .as_array_mut()
-            .expect("the `members` value should be an array");
+            .expect("the `members` value should be an array")
+    }
+
+    fn members(&self) -> &[Value] {
+        let workspace = self
+            .0
+            .get("workspace")
+            .expect("a constructed Workspace struct should always have a [workspace] table")
+            .as_table()
+            .expect("the `workspace` value should always be a table");
+
+        workspace
+            .get("members")
+            .expect("the `members` value is missing from [workspace]")
+            .as_array()
+            .expect("the `members` value should be an array")
+    }
+
+    fn get_days(&self) -> Vec<Challenge> {
+        self.members()
+            .iter()
+            .filter_map(|v| v.as_str().and_then(|s| s.parse().ok()))
+            .collect()
+    }
+
+    fn add_day(&mut self, challenge: Challenge) -> Result<(), RuntimeError> {
+        let members = self.members_mut();
 
         let value = Value::String(challenge.crate_name());
         if members.contains(&value) {
@@ -284,7 +342,26 @@ impl InputCache {
         }
     }
 
-    fn fetch(challenge: Challenge) -> Result<String, RuntimeError> {
+    fn get_present() -> Result<Vec<Challenge>, RuntimeError> {
+        std::fs::read_dir(Self::CACHE_PATH)?
+            .map(|entry| {
+                let entry = entry?;
+                let meta = entry.metadata()?;
+
+                Ok(meta.is_file().then(|| entry.path()).and_then(|path| {
+                    path.file_name()
+                        .and_then(|s| s.to_string_lossy().to_string().parse().ok())
+                }))
+            })
+            .filter_map(|r| match r {
+                Err(e) => Some(Err(e)),
+                Ok(None) => None,
+                Ok(Some(v)) => Some(Ok(v)),
+            })
+            .collect()
+    }
+
+    fn fetch(challenge: &Challenge) -> Result<String, RuntimeError> {
         std::fs::create_dir_all(Self::CACHE_PATH)?;
 
         if let Some(res) = std::fs::read_dir(Self::CACHE_PATH)?.find_map(|entry| {
@@ -404,6 +481,8 @@ enum Command {
         #[arg(short, long)]
         year: Option<Year>,
     },
+    /// Fetches input for all crates missing it
+    Fetch,
 }
 
 fn main() -> Result<(), RuntimeError> {
@@ -437,7 +516,7 @@ fn main() -> Result<(), RuntimeError> {
                         // Add input to new crate
                         std::fs::write(
                             format!("{}/src/input.txt", challenge.crate_name()),
-                            InputCache::fetch(challenge)?,
+                            InputCache::fetch(&challenge)?,
                         )?;
 
                         // Commit workspace changes
@@ -466,6 +545,25 @@ fn main() -> Result<(), RuntimeError> {
                     Err(e) => Err(e),
                 }
             }
+        }
+        Command::Fetch => {
+            let crates = Workspace::from_current_directory()?
+                .get_days()
+                .into_iter()
+                .collect::<HashSet<_>>();
+
+            let inputs = InputCache::get_present()?
+                .into_iter()
+                .collect::<HashSet<_>>();
+
+            for challenge in crates.difference(&inputs) {
+                std::fs::write(
+                    format!("{}/src/input.txt", challenge.crate_name()),
+                    InputCache::fetch(challenge)?,
+                )?;
+            }
+
+            Ok(())
         }
     }
 }
