@@ -312,7 +312,7 @@ impl InputCache {
         } else {
             let input = ureq::get(&format!(
                 "https://adventofcode.com/{}/day/{}/input",
-                challenge.year, challenge.day,
+                challenge.year, challenge.day.0,
             ))
             .set("Cookie", &Self::get_session()?)
             .call()
