@@ -67,3 +67,8 @@ And if you want to run the standalone solution yourself, you can just specify th
 ```sh
 cargo run --bin day_my-day_my-year
 ```
+
+If you don't have the input already fetched (for example, you just cloned this repository), you can run the following command, assuming you set up your AoC token as explained before:
+```sh
+cargo run -- fetch
+```
