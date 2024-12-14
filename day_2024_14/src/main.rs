@@ -1,11 +1,7 @@
 use std::{cmp::Ordering, convert::Infallible, str::FromStr};
 
-use aoc_utils::*;
-use image::ImageBuffer;
-use itertools::Itertools;
-
 const INPUT: &str = include_str!("input.txt");
-const EXAMPLE: &str = r#"p=0,4 v=3,-3
+const _EXAMPLE: &str = r#"p=0,4 v=3,-3
 p=6,3 v=-1,-3
 p=10,3 v=-1,2
 p=2,0 v=2,-1
