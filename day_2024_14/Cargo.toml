@@ -1,0 +1,11 @@
+[dependencies]
+image = "0.25.5"
+itertools = "0.11.0"
+
+[dependencies.aoc-utils]
+path = "../aoc-utils"
+
+[package]
+edition = "2021"
+name = "day_2024_14"
+version = "0.1.0"
